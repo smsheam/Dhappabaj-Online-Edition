@@ -15,6 +15,7 @@ import {
   Shield,
   Layers,
   Sparkles,
+  AlertTriangle,
 } from 'lucide-react';
 import { Language, Theme, CategoryId } from '../../types/game';
 import { OnlinePlayer, OnlineRoomData, RoomSettings } from '../../types/multiplayer';
@@ -55,8 +56,8 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [starting, setStarting] = useState<boolean>(false);
 
-  // Editable settings draft for host
   const [tempSettings, setTempSettings] = useState<RoomSettings>({ ...room.settings });
+  const [isLeavingConfirmOpen, setIsLeavingConfirmOpen] = useState<boolean>(false);
 
   const shareUrl = `${window.location.origin}${window.location.pathname}?room=${room.roomCode}`;
 
@@ -118,11 +119,11 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
   };
 
   const handleStartGame = async () => {
-    if (players.length < 4) {
+    if (players.length < 3) {
       setErrorMsg(
         isEn
-          ? 'At least 4 players required to start the game'
-          : 'খেলা শুরু করার জন্য কমপক্ষে ৪ জন খেলোয়াড় প্রয়োজন'
+          ? 'At least 3 players required to start the game'
+          : 'খেলা শুরু করার জন্য কমপক্ষে ৩ জন খেলোয়াড় প্রয়োজন'
       );
       return;
     }
@@ -138,8 +139,14 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
     }
   };
 
-  const handleLeaveRoom = async () => {
+  const handleLeaveClick = () => {
     sound.playClick();
+    setIsLeavingConfirmOpen(true);
+  };
+
+  const executeLeaveRoom = async () => {
+    sound.playClick();
+    setIsLeavingConfirmOpen(false);
     await leaveOnlineRoom(room.roomCode);
     onLeave();
   };
@@ -156,7 +163,7 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
   };
 
   const allReady = players.filter((p) => !p.isHost).every((p) => p.isReady);
-  const canStart = isHost && players.length >= 4;
+  const canStart = isHost && players.length >= 3;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between p-4 sm:p-8 max-w-4xl mx-auto transition-colors duration-200">
@@ -212,7 +219,7 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
 
           <button
             type="button"
-            onClick={handleLeaveRoom}
+            onClick={handleLeaveClick}
             className="px-3.5 py-2 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
             title={isEn ? 'Leave Room' : 'রুম ত্যাগ করুন'}
           >
@@ -236,10 +243,10 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
           </div>
 
           <div className="text-xs text-slate-500 dark:text-slate-400">
-            {players.length < 4
+            {players.length < 3
               ? isEn
-                ? `Need ${4 - players.length} more to start`
-                : `শুরু করতে আরও ${4 - players.length} জন প্রয়োজন`
+                ? `Need ${3 - players.length} more to start`
+                : `শুরু করতে আরও ${3 - players.length} জন প্রয়োজন`
               : isEn
               ? 'Ready to start!'
               : 'খেলা শুরুর উপযোগী!'}
@@ -302,6 +309,12 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
 
                   {/* Status & Actions */}
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {p.connectionStatus === 'offline' || (Date.now() - p.lastSeenAt > 35000) ? (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                        {isEn ? 'Offline' : 'বিচ্ছিন্ন'}
+                      </span>
+                    ) : null}
+
                     {p.isHost ? (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300">
                         {isEn ? 'Host' : 'হোস্ট'}
@@ -388,15 +401,25 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
         )}
 
         {/* Game summary preview */}
-        <div className="flex items-center justify-center gap-4 text-[11px] text-slate-500 dark:text-slate-400">
+        <div className="flex items-center justify-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 flex-wrap">
           <span className="flex items-center gap-1">
             <Shield className="w-3 h-3 text-rose-500" />
             {isEn ? `${room.settings.imposterCount || 1} Imposter` : `${room.settings.imposterCount || 1} জন ধাপ্পাবাজ`}
           </span>
           <span>•</span>
           <span className="flex items-center gap-1">
+            <Clock className="w-3 h-3 text-amber-500" />
+            {isEn ? `${room.settings.clueTimer || 30}s Clue` : `${room.settings.clueTimer || 30} সে. ক্লু`}
+          </span>
+          <span>•</span>
+          <span className="flex items-center gap-1">
             <Clock className="w-3 h-3 text-sky-500" />
-            {isEn ? `${room.settings.discussionTimer}s Discussion` : `${room.settings.discussionTimer} সে. আলোচনা`}
+            {isEn ? `${room.settings.discussionTimer || 90}s Discuss` : `${room.settings.discussionTimer || 90} সে. আলোচনা`}
+          </span>
+          <span>•</span>
+          <span className="flex items-center gap-1">
+            <Clock className="w-3 h-3 text-purple-500" />
+            {isEn ? `${room.settings.votingTimer || 30}s Vote` : `${room.settings.votingTimer || 30} সে. ভোট`}
           </span>
           <span>•</span>
           <span className="flex items-center gap-1">
@@ -463,17 +486,20 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
             </div>
 
             <form onSubmit={handleSaveSettings} className="space-y-4">
-              {/* Max Players */}
+              {/* Max Players (3 to 10) */}
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
-                  {isEn ? 'Max Players' : 'সর্বোচ্চ খেলোয়াড়'}
+                  {isEn ? 'Max Players (3 to 10)' : 'সর্বোচ্চ খেলোয়াড় (৩ থেকে ১০)'}
                 </label>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {[4, 6, 8, 10].map((num) => (
+                <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
+                  {[3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
                     <button
                       type="button"
                       key={num}
-                      onClick={() => setTempSettings({ ...tempSettings, maxPlayers: num })}
+                      onClick={() => {
+                        const newImposterCount = num <= 4 ? 1 : tempSettings.imposterCount;
+                        setTempSettings({ ...tempSettings, maxPlayers: num, imposterCount: newImposterCount });
+                      }}
                       className={`py-2 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer ${
                         tempSettings.maxPlayers === num
                           ? 'bg-amber-500 text-slate-950 shadow-sm'
@@ -492,36 +518,64 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
                   {isEn ? 'Number of Imposters' : 'ধাপ্পাবাজের সংখ্যা'}
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {[1, 2].map((num) => (
+                  {[1, 2].map((num) => {
+                    const isDisabled = num === 2 && (tempSettings.maxPlayers || 8) <= 4;
+                    return (
+                      <button
+                        type="button"
+                        key={num}
+                        disabled={isDisabled}
+                        onClick={() => setTempSettings({ ...tempSettings, imposterCount: num as 1 | 2 })}
+                        className={`py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                          tempSettings.imposterCount === num
+                            ? 'bg-rose-500 text-white shadow-sm'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        {isEn ? `${num} Imposter` : `${num} জন ধাপ্পাবাজ`}
+                        {isDisabled && <span className="block text-[10px] opacity-75 font-normal">(Needs 5+ players)</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Clue Timer (20, 30, 45, 60s) */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
+                  {isEn ? 'Player Clue Stage Time' : 'খেলোয়াড়ের ক্লু দেওয়ার সময়'}
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[20, 30, 45, 60].map((sec) => (
                     <button
                       type="button"
-                      key={num}
-                      onClick={() => setTempSettings({ ...tempSettings, imposterCount: num as 1 | 2 })}
-                      className={`py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        tempSettings.imposterCount === num
-                          ? 'bg-rose-500 text-white shadow-sm'
+                      key={sec}
+                      onClick={() => setTempSettings({ ...tempSettings, clueTimer: sec })}
+                      className={`py-2 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer ${
+                        (tempSettings.clueTimer || 30) === sec
+                          ? 'bg-amber-500 text-slate-950 shadow-sm'
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                       }`}
                     >
-                      {isEn ? `${num} Imposter` : `${num} জন ধাপ্পাবাজ`}
+                      {sec}s
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Discussion Timer */}
+              {/* Discussion Timer (45, 60, 90, 120s) */}
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
                   {isEn ? 'Discussion Time' : 'আলোচনার সময়'}
                 </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[60, 90, 120].map((sec) => (
+                <div className="grid grid-cols-4 gap-2">
+                  {[45, 60, 90, 120].map((sec) => (
                     <button
                       type="button"
                       key={sec}
                       onClick={() => setTempSettings({ ...tempSettings, discussionTimer: sec })}
-                      className={`py-2.5 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer ${
-                        tempSettings.discussionTimer === sec
+                      className={`py-2 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer ${
+                        (tempSettings.discussionTimer || 90) === sec
                           ? 'bg-sky-500 text-white shadow-sm'
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                       }`}
@@ -532,19 +586,19 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
                 </div>
               </div>
 
-              {/* Voting Timer */}
+              {/* Voting Timer (20, 30, 45, 60s) */}
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
                   {isEn ? 'Voting Time' : 'ভোটের সময়'}
                 </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[30, 45, 60].map((sec) => (
+                <div className="grid grid-cols-4 gap-2">
+                  {[20, 30, 45, 60].map((sec) => (
                     <button
                       type="button"
                       key={sec}
                       onClick={() => setTempSettings({ ...tempSettings, votingTimer: sec })}
-                      className={`py-2.5 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer ${
-                        tempSettings.votingTimer === sec
+                      className={`py-2 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer ${
+                        (tempSettings.votingTimer || 30) === sec
                           ? 'bg-purple-500 text-white shadow-sm'
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                       }`}
@@ -646,6 +700,56 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Leave Confirmation Modal */}
+      {isLeavingConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-sm p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center space-y-4 shadow-2xl">
+            <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-500/15 text-rose-500 flex items-center justify-center text-2xl">
+              <AlertTriangle className="w-6 h-6 text-rose-500" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                {isHost
+                  ? isEn
+                    ? 'Close Room for All?'
+                    : 'সবার জন্য রুমটি বন্ধ করতে চান?'
+                  : isEn
+                  ? 'Leave Room?'
+                  : 'রুম ত্যাগ করতে চান?'}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {isHost
+                  ? isEn
+                    ? 'Leaving as host will immediately close this room for all connected players.'
+                    : 'আপনি হোস্ট। আপনি বের হলে সবার জন্য এই রুমটি বন্ধ হয়ে যাবে।'
+                  : isEn
+                  ? 'Are you sure you want to leave this room?'
+                  : 'আপনি কি নিশ্চিত যে এই রুমটি ত্যাগ করতে চান?'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsLeavingConfirmOpen(false)}
+                className="py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs cursor-pointer"
+              >
+                {isEn ? 'Stay' : 'থাকুন'}
+              </button>
+
+              <button
+                type="button"
+                onClick={executeLeaveRoom}
+                className="py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs cursor-pointer"
+              >
+                {isEn ? 'Leave Room' : 'বেরিয়ে যান'}
+              </button>
+            </div>
           </div>
         </div>
       )}

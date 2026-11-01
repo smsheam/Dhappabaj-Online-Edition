@@ -307,6 +307,12 @@ export default function App() {
             setOnlinePlayer(null);
             setPhase('INTRO');
           }}
+          onReopenOnlineModal={() => {
+            setOnlineRoom(null);
+            setOnlinePlayer(null);
+            setPhase('INTRO');
+            setIsOnlineModalOpen(true);
+          }}
         />
       ) : (
         <>

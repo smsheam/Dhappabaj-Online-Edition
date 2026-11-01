@@ -81,33 +81,61 @@ export async function signInWithGoogle(): Promise<User> {
   }
 }
 
-// Ensure authenticated user (tries existing session, then anonymous auth)
+// Ensure authenticated user (tries existing session, then anonymous auth, with safety timeout)
 export async function ensureAuthenticatedUser(): Promise<User> {
   if (auth.currentUser) {
     return auth.currentUser;
   }
 
   return new Promise((resolve, reject) => {
+    let resolved = false;
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        unsubscribe();
+        if (auth.currentUser) {
+          resolve(auth.currentUser);
+        } else {
+          reject(new Error('Authentication timeout. Please check your connection or sign in with Google.'));
+        }
+      }
+    }, 10000);
+
     const unsubscribe = onAuthStateChanged(
       auth,
       async (user) => {
+        if (resolved) return;
         if (user) {
+          resolved = true;
+          clearTimeout(timeout);
           unsubscribe();
           resolve(user);
         } else {
           try {
             const userCredential = await signInAnonymously(auth);
-            unsubscribe();
-            resolve(userCredential.user);
+            if (!resolved) {
+              resolved = true;
+              clearTimeout(timeout);
+              unsubscribe();
+              resolve(userCredential.user);
+            }
           } catch (err: any) {
-            unsubscribe();
-            reject(err);
+            if (!resolved) {
+              resolved = true;
+              clearTimeout(timeout);
+              unsubscribe();
+              reject(err);
+            }
           }
         }
       },
       (err) => {
-        unsubscribe();
-        reject(err);
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          unsubscribe();
+          reject(err);
+        }
       }
     );
   });

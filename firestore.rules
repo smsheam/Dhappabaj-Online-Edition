@@ -45,7 +45,7 @@ service cloud.firestore {
         allow create: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
           request.auth.uid == playerId;
 
-        // Player updates their own status/name/ready/clue, or host updates scores
+        // Player updates their own status/name/ready/clue/hasSeenCard, or host updates scores
         allow update: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
           (request.auth.uid == playerId || isRoomHost(roomId));
 
@@ -78,6 +78,15 @@ service cloud.firestore {
           request.auth.uid == playerId;
         allow delete: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
           (request.auth.uid == playerId || isRoomHost(roomId));
+      }
+
+      // Live discussion messages subcollection
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && isValidId(roomId) && isValidId(messageId);
+        allow list: if isSignedIn() && isValidId(roomId);
+        allow create: if isSignedIn() && isValidId(roomId) && isValidId(messageId) &&
+          request.resource.data.senderId == request.auth.uid;
+        allow update, delete: if isRoomHost(roomId);
       }
     }
   }

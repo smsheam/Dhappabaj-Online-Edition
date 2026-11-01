@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MessageSquare, Send, CheckCircle2, Clock, ArrowRight } from 'lucide-react';
 import { Language, Theme } from '../../types/game';
 import { OnlinePlayer, OnlineRoomData, PrivatePlayerRole } from '../../types/multiplayer';
@@ -27,6 +27,33 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
   const [isSubmitted, setIsSubmitted] = useState<boolean>(!!currentPlayer.clue);
   const [submitting, setSubmitting] = useState<boolean>(false);
 
+  // Synchronized countdown timer
+  const clueDuration = room.settings.clueTimer || 30;
+  const [timeLeft, setTimeLeft] = useState<number>(() => {
+    if (!room.phaseEndsAt) return clueDuration;
+    return Math.max(0, Math.ceil((room.phaseEndsAt - Date.now()) / 1000));
+  });
+
+  useEffect(() => {
+    if (!room.phaseEndsAt) return;
+
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((room.phaseEndsAt! - Date.now()) / 1000));
+      setTimeLeft(remaining);
+
+      if (remaining <= 5 && remaining > 0) {
+        sound.playTimerTick();
+      }
+
+      if (remaining === 0 && isHost) {
+        clearInterval(interval);
+        handleProceedToDiscussion();
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [room.phaseEndsAt, isHost]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clueInput.trim()) return;
@@ -49,37 +76,50 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
   };
 
   const submittedCount = players.filter((p) => !!p.clue).length;
-  const allCluesIn = submittedCount === players.length;
+  const allCluesIn = submittedCount === players.length && players.length > 0;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between p-4 sm:p-8 max-w-2xl mx-auto transition-colors duration-200">
-      {/* Top Header */}
-      <div className="text-center space-y-1">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400">
-          <MessageSquare className="w-3.5 h-3.5" />
-          <span>{isEn ? 'Stage 1: Give Your Clue' : '১ম ধাপ: আপনার ক্লু দিন'}</span>
+      {/* Top Header with Timer */}
+      <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+            <MessageSquare className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+              {isEn ? 'Stage 1: Give Your Clue' : '১ম ধাপ: আপনার ক্লু দিন'}
+            </h2>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              {isEn ? 'Enter 1-2 words hint' : '১-২ শব্দের ইঙ্গিত লিখুন'}
+            </p>
+          </div>
         </div>
-        <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-          {isEn ? 'Submit Your Secret Clue' : 'আপনার ইঙ্গিতমূলক ক্লু লিখুন'}
-        </h2>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          {isEn
-            ? 'Type a 1-2 word hint about your role. Innocents know the word; Imposter pretends!'
-            : '১-২ শব্দের ক্লু লিখুন। নাগরিকরা মূল শব্দের আভাস দিন, আর ধাপ্পাবাজ আন্দাজে নাটক করুন!'}
-        </p>
+
+        {/* Synchronized Clue Timer */}
+        <div
+          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-2xl font-mono text-lg font-black border transition-all ${
+            timeLeft <= 5
+              ? 'bg-rose-500/20 border-rose-500 text-rose-600 dark:text-rose-400 animate-pulse'
+              : 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400'
+          }`}
+        >
+          <Clock className="w-4 h-4" />
+          <span>{timeLeft}s</span>
+        </div>
       </div>
 
       {/* Clue Input Form */}
-      <div className="my-6 space-y-6">
+      <div className="my-5 space-y-5">
         <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-              {isEn ? 'Your Clue (1-3 words)' : 'আপনার ক্লু (১-৩ শব্দ)'}
+              {isEn ? 'Your Clue' : 'আপনার ক্লু'}
             </label>
             {isSubmitted && (
               <span className="text-xs font-bold text-emerald-500 flex items-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>{isEn ? 'Submitted' : 'জমা হয়েছে'}</span>
+                <span>{isEn ? 'Clue Saved' : 'ক্লু জমা হয়েছে'}</span>
               </span>
             )}
           </div>
@@ -93,7 +133,7 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
                 if (isSubmitted) setIsSubmitted(false);
               }}
               maxLength={40}
-              placeholder={isEn ? 'e.g. Delicious, spicy...' : 'যেমন: সুস্বাদু, ঝাল, লাল...'}
+              placeholder={isEn ? 'e.g. Yellow, Sweet, Morning...' : 'যেমন: মিষ্টি, গোল, সকাল...'}
               className="flex-1 px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm font-semibold focus:outline-none focus:border-amber-500"
             />
             <button
@@ -102,24 +142,29 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
               className="px-6 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <Send className="w-4 h-4" />
-              <span>{isEn ? 'Send' : 'জমা দিন'}</span>
+              <span>{isEn ? 'Submit' : 'জমা দিন'}</span>
             </button>
           </form>
 
-          {/* Quick reminder pill */}
-          <div className="text-[11px] text-slate-400 dark:text-slate-500 text-center">
-            {privateRole?.role === 'imposter'
-              ? isEn
-                ? 'Hint: Blend in! Listen carefully to other clues.'
-                : 'পরামর্শ: এমন ক্লু দিন যেন কেউ সন্দেহ না করে!'
-              : isEn
-              ? `Secret Word: "${privateRole?.wordBn} (${privateRole?.wordEn})"`
-              : `আসল শব্দ: "${privateRole?.wordBn}"`}
+          {/* Quick role reminder */}
+          <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200/60 dark:border-slate-800 text-[11px] text-center">
+            {privateRole?.role === 'imposter' ? (
+              <span className="text-rose-500 font-bold">
+                🕵️ {isEn ? 'Imposter Hint: ' : 'ধাপ্পাবাজ ইঙ্গিত: '}
+                {isEn
+                  ? privateRole.shortHintEn || privateRole.hintEn || 'Blend in smoothly'
+                  : privateRole.shortHintBn || privateRole.hintBn || 'সবার সাথে মিশে যান'}
+              </span>
+            ) : (
+              <span className="text-amber-600 dark:text-amber-400 font-bold">
+                🛡️ {isEn ? `Secret Word: "${privateRole?.wordBn} (${privateRole?.wordEn})"` : `আসল শব্দ: "${privateRole?.wordBn}"`}
+              </span>
+            )}
           </div>
         </div>
 
         {/* Live Clue Submissions Feed */}
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           <div className="flex items-center justify-between px-1">
             <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
               {isEn ? 'Clues Submitted So Far' : 'জমা হওয়া ক্লুসমূহ'}
@@ -129,9 +174,10 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[35vh] overflow-y-auto p-1">
             {players.map((p) => {
               const hasClue = !!p.clue;
+              const isMe = p.id === currentPlayer.id;
               return (
                 <div
                   key={p.id}
@@ -144,7 +190,7 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span className="text-xl">{p.avatar || '🕵️'}</span>
                     <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
-                      {p.name}
+                      {p.name} {isMe && (isEn ? '(You)' : '(আপনি)')}
                     </span>
                   </div>
 
@@ -155,8 +201,8 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
                       </span>
                     ) : (
                       <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        <span>{isEn ? 'Thinking...' : 'লিখছে...'}</span>
+                        <Clock className="w-3 h-3 animate-spin" />
+                        <span>{isEn ? 'Thinking...' : 'লিখছেন...'}</span>
                       </span>
                     )}
                   </div>
@@ -168,14 +214,14 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
       </div>
 
       {/* Host Controls */}
-      <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
+      <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
         {isHost ? (
           <button
             type="button"
             onClick={handleProceedToDiscussion}
             className={`w-full py-4 px-6 rounded-2xl font-black text-base flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg ${
               allCluesIn
-                ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 shadow-amber-500/25'
+                ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 shadow-amber-500/25 ring-2 ring-amber-400/50'
                 : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700'
             }`}
           >

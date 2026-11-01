@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, PlusCircle, LogIn, X, ExternalLink, ShieldCheck, AlertCircle } from 'lucide-react';
 import { Language, Theme } from '../../types/game';
 import { PLAYER_AVATARS } from '../../data/avatars';
-import { createOnlineRoom, joinOnlineRoom } from '../../services/multiplayerService';
+import { createOnlineRoom, joinOnlineRoom, DEFAULT_ONLINE_SETTINGS } from '../../services/multiplayerService';
 import { sound } from '../../utils/audio';
 import { OnlinePlayer, OnlineRoomData } from '../../types/multiplayer';
 import { signInWithGoogle, auth } from '../../firebase';
@@ -70,33 +70,8 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
       setNeedsGoogleSignIn(false);
 
       if (activeTab === 'create') {
-        const { roomCode: createdCode, player } = await createOnlineRoom(finalName, avatar);
-        onRoomJoined(
-          {
-            roomCode: createdCode,
-            hostId: player.id,
-            status: 'waiting',
-            currentPhase: 'LOBBY',
-            currentRound: 1,
-            totalRounds: 3,
-            playerCount: 1,
-            settings: {
-              maxPlayers: 8,
-              imposterCount: 1,
-              discussionTimer: 90,
-              votingTimer: 45,
-              language: 'mixed',
-              selectedCategories: ['food', 'people', 'object', 'animal'],
-              imposterFinalGuess: true,
-              totalRounds: 3,
-            },
-            phaseEndsAt: null,
-            usedWordIds: [],
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-          player
-        );
+        const { roomData, player } = await createOnlineRoom(finalName, avatar);
+        onRoomJoined(roomData, player);
       } else {
         const cleanCode = roomCode.trim().toUpperCase();
         const { roomData, player } = await joinOnlineRoom(cleanCode, finalName, avatar);
@@ -121,33 +96,23 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
     setLoading(true);
     sound.playClick();
     try {
-      const { roomCode: createdCode, player } = await createOnlineRoom(name, avatar);
-      onRoomJoined(
-        {
-          roomCode: createdCode,
-          hostId: player.id,
-          status: 'waiting',
-          currentPhase: 'LOBBY',
-          currentRound: 1,
-          totalRounds: 3,
-          playerCount: 1,
-          settings: {
-            maxPlayers: 8,
-            imposterCount: 1,
-            discussionTimer: 90,
-            votingTimer: 45,
-            language: 'mixed',
-            selectedCategories: ['food', 'people', 'object', 'animal'],
-            imposterFinalGuess: true,
-            totalRounds: 3,
-          },
-          phaseEndsAt: null,
-          usedWordIds: [],
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-        player
+      const createPromise = createOnlineRoom(name, avatar);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                isEn
+                  ? 'Connection timeout. Please check your internet and retry.'
+                  : 'সংযোগের সময় শেষ হয়েছে। ইন্টারনেট সংযোগ পরীক্ষা করে পুনরায় চেষ্টা করুন।'
+              )
+            ),
+          12000
+        )
       );
+
+      const { roomData, player } = await Promise.race([createPromise, timeoutPromise]);
+      onRoomJoined(roomData, player);
     } catch (err: any) {
       console.error('Room create error:', err);
       const isRestricted =
@@ -185,7 +150,22 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
     setLoading(true);
     sound.playClick();
     try {
-      const { roomData, player } = await joinOnlineRoom(cleanCode, name, avatar);
+      const joinPromise = joinOnlineRoom(cleanCode, name, avatar);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                isEn
+                  ? 'Connection timeout. Please check your internet and retry.'
+                  : 'সংযোগের সময় শেষ হয়েছে। ইন্টারনেট সংযোগ পরীক্ষা করে পুনরায় চেষ্টা করুন।'
+              )
+            ),
+          12000
+        )
+      );
+
+      const { roomData, player } = await Promise.race([joinPromise, timeoutPromise]);
       onRoomJoined(roomData, player);
     } catch (err: any) {
       console.error('Room join error:', err);

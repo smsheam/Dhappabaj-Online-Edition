@@ -1,0 +1,802 @@
+Category,Secret Word,Hint
+Food,Biryani,Aromatic rice dish
+Food,Kacchi Biryani,Raw meat before cooking
+Food,Tehari,Mustard oil and rice
+Food,Morog Polao,Chicken and fragrant rice
+Food,Khichuri,Rice and lentils
+Food,Panta Bhat,Soaked rice
+Food,Bhuna Khichuri,Spicy rainy-day meal
+Food,Beef Kala Bhuna,Chattogram speciality
+Food,Beef Bhuna,Slow-cooked meat
+Food,Beef Rezala,Rich white gravy
+Food,Mutton Korma,Creamy meat curry
+Food,Chicken Roast,Wedding feast favourite
+Food,Chicken Curry,Everyday family meal
+Food,Chicken Tikka,Marinated grilled meat
+Food,Chicken Tandoori,Red grilled chicken
+Food,Chicken Shashlik,Meat on skewers
+Food,Chicken Fry,Crispy outside
+Food,Chicken Nuggets,Bite-sized snacks
+Food,Chicken Burger,Fast-food favourite
+Food,Chicken Sandwich,Bread with filling
+Food,Beef Burger,Patty inside a bun
+Food,Hot Dog,Sausage in bread
+Food,Pizza,Italian round favourite
+Food,Pasta,Italian noodle dish
+Food,Spaghetti,Long thin pasta
+Food,Lasagna,Layered pasta
+Food,Macaroni,Short curved pasta
+Food,Fried Rice,Rice cooked in a wok
+Food,Chow Mein,Stir-fried noodles
+Food,Ramen,Japanese noodle soup
+Food,Udon,Thick Japanese noodles
+Food,Sushi,Rice with seafood
+Food,Tempura,Japanese crispy coating
+Food,Dumplings,Dough filled with stuffing
+Food,Momo,Himalayan steamed snack
+Food,Spring Roll,Crispy stuffed roll
+Food,Samosa,Triangular fried snack
+Food,Singara,Potato-filled pastry
+Food,Shingara,Tea-time favourite
+Food,Fuchka,Tangy street snack
+Food,Chotpoti,Peas and spicy sauce
+Food,Jhalmuri,Spicy puffed rice
+Food,Bhelpuri,Indian street snack
+Food,Pani Puri,Water-filled crispy shell
+Food,Doi Fuchka,Yogurt-based street food
+Food,Papri Chaat,Crispy and tangy
+Food,Aloo Tikki,Spiced potato patty
+Food,French Fries,Deep-fried potato sticks
+Food,Potato Wedges,Thick potato slices
+Food,Mashed Potato,Soft crushed potatoes
+Food,Potato Chips,Crunchy packet snack
+Food,Nachos,Chips with toppings
+Food,Popcorn,Movie-time snack
+Food,Fried Chicken,Crispy fast food
+Food,Fish and Chips,British classic
+Food,Fish Curry,Popular Bengali meal
+Food,Fish Fry,Crispy seafood
+Food,Fish Cutlet,Breaded fish snack
+Food,Fish Fingers,Long crispy pieces
+Food,Grilled Salmon,Pink seafood
+Food,Prawn Malai Curry,Coconut-based seafood
+Food,Chingri Bhorta,Mashed shrimp
+Food,Hilsa Fry,National fish favourite
+Food,Shorshe Ilish,Mustard fish curry
+Food,Ilish Pulao,Fish with fragrant rice
+Food,Shutki Bhorta,Dried fish preparation
+Food,Rui Kalia,Rich fish gravy
+Food,Koi Fish Curry,Freshwater fish
+Food,Fish Biriyani,Rice with seafood
+Food,Crab Curry,Hard-shelled seafood
+Food,Lobster,Expensive seafood
+Food,Squid,Sea creature on a plate
+Food,Egg Curry,Boiled eggs in gravy
+Food,Egg Bhurji,Scrambled Indian-style eggs
+Food,Omelette,Beaten eggs in a pan
+Food,Boiled Egg,Breakfast protein
+Food,Fried Egg,Sunny-side breakfast
+Food,Egg Benedict,Poached egg on bread
+Food,Shakshuka,Eggs in tomato sauce
+Food,Dal,Lentil preparation
+Food,Dal Fry,Spiced lentils
+Food,Dal Puri,Stuffed fried bread
+Food,Aloo Paratha,Potato-stuffed flatbread
+Food,Naan,Oven-baked flatbread
+Food,Butter Naan,Soft buttery bread
+Food,Garlic Naan,Bread with garlic
+Food,Roti,Everyday flatbread
+Food,Chapati,Thin Indian bread
+Food,Luchi,Deep-fried flatbread
+Food,Puri,Puffy fried bread
+Food,Paratha,Layered flatbread
+Food,Tandoori Roti,Clay-oven bread
+Food,Kulcha,Soft leavened bread
+Food,Pitha,Traditional Bengali treat
+Food,Bhapa Pitha,Steamed winter delicacy
+Food,Chitoi Pitha,Small round rice cake
+Food,Patishapta,Coconut-filled pancake
+Food,Puli Pitha,Sweet stuffed rice cake
+Food,Nakshi Pitha,Decorative rice cake
+Food,Teler Pitha,Deep-fried rice snack
+Food,Haleem,Slow-cooked meat and lentils
+Food,Nihari,Overnight meat stew
+Food,Payesh,Rice pudding
+Food,Firni,Thick milk dessert
+Food,Jorda,Sweet yellow rice
+Food,Shemai,Vermicelli dessert
+Food,Falooda,Layered cold dessert
+Food,Kulfi,Traditional frozen dessert
+Food,Ice Cream,Frozen sweet treat
+Food,Gelato,Italian frozen dessert
+Food,Chocolate Cake,Cocoa-based dessert
+Food,Black Forest Cake,Chocolate and cherries
+Food,Cheesecake,Cream cheese dessert
+Food,Red Velvet Cake,Red-coloured cake
+Food,Brownie,Dense chocolate square
+Food,Donut,Ring-shaped sweet
+Food,Cupcake,Small individual cake
+Food,Muffin,Breakfast baked treat
+Food,Croissant,French buttery pastry
+Food,Waffle,Square-patterned breakfast
+Food,Pancake,Flat breakfast cake
+Food,French Toast,Egg-soaked bread
+Food,Bread Pudding,Baked dessert
+Food,Custard,Soft milk dessert
+Food,Caramel Pudding,Burnt sugar topping
+Food,Rasgulla,Soft syrupy balls
+Food,Gulab Jamun,Fried milk sweet
+Food,Rasmalai,Sweet soaked in milk
+Food,Sandesh,Bengali milk sweet
+Food,Chamcham,Oval-shaped sweet
+Food,Mishti Doi,Sweet fermented yogurt
+Food,Roshogolla,Famous Bengali sweet
+Food,Laddu,Round Indian sweet
+Food,Jalebi,Spiral-shaped sweet
+Food,Barfi,Milk-based sweet
+Food,Kheer,Milk and rice dessert
+Food,Baklava,Layered nut pastry
+Food,Kunafa,Middle Eastern dessert
+Food,Tiramisu,Coffee-flavoured Italian dessert
+Food,Macaron,Colourful French confection
+Food,Chocolate Mousse,Light chocolate dessert
+Food,Apple Pie,American dessert
+Food,Doner Kebab,Turkish street food
+Food,Shawarma,Meat wrapped in bread
+Food,Falafel,Fried chickpea balls
+Food,Hummus,Chickpea-based dip
+Food,Kebab,Grilled meat
+Food,Seekh Kebab,Meat on a metal skewer
+Food,Shami Kebab,Lentil and meat patty
+Food,Chapli Kebab,Flat spicy meat patty
+Food,Tikka Masala,Creamy spiced curry
+Food,Butter Chicken,Creamy tomato gravy
+Food,Palak Paneer,Spinach and cheese
+Food,Paneer Tikka,Grilled Indian cheese
+Food,Shahi Paneer,Rich cheese curry
+Food,Chana Masala,Spicy chickpeas
+Food,Rajma,Red kidney bean curry
+Food,Dal Makhani,Creamy black lentils
+Food,Gobi Manchurian,Crispy cauliflower
+Food,Manchurian Chicken,Indo-Chinese favourite
+Food,Dim Sum,Chinese bite-sized dishes
+Food,Peking Duck,Famous Chinese roast
+Food,Sweet and Sour Chicken,Tangy Chinese dish
+Food,Thai Green Curry,Coconut-based spicy curry
+Food,Tom Yum Soup,Sour Thai soup
+Food,Pad Thai,Thai stir-fried noodles
+Food,Kimchi,Korean fermented vegetables
+Food,Bibimbap,Korean mixed rice
+Food,Bulgogi,Korean marinated beef
+Food,Tteokbokki,Spicy Korean rice cakes
+Food,Tacos,Mexican folded tortillas
+Food,Burrito,Stuffed tortilla roll
+Food,Nachos Supreme,Loaded tortilla chips
+Food,Guacamole,Mashed avocado dip
+Food,Quesadilla,Cheese-filled tortilla
+Food,Hot Chocolate,Warm cocoa drink
+Food,Milkshake,Blended milk drink
+Food,Lemonade,Refreshing citrus drink
+Food,Lassi,Yogurt-based drink
+Food,Mango Smoothie,Blended tropical fruit
+Famous People,Sheikh Mujibur Rahman,Bangabandhu
+Famous People,Ziaur Rahman,Former Bangladesh president
+Famous People,Muhammad Yunus,Nobel Peace Prize
+Famous People,Shakib Al Hasan,All-rounder
+Famous People,Mashrafe Mortaza,Narail Express
+Famous People,Tamim Iqbal,Opening batsman
+Famous People,Mushfiqur Rahim,Mr Dependable
+Famous People,Mustafizur Rahman,The Cutter Master
+Famous People,Taskin Ahmed,Fast bowler
+Famous People,Litton Das,Bangladesh wicketkeeper
+Famous People,Jaya Ahsan,Award-winning actress
+Famous People,Shakib Khan,Dhallywood superstar
+Famous People,Chanchal Chowdhury,Hawa actor
+Famous People,Mosharraf Karim,Popular comedian
+Famous People,Afran Nisho,Television actor
+Famous People,Tahsan Khan,Singer and actor
+Famous People,Mehazabien Chowdhury,TV actress
+Famous People,Pori Moni,Bangladeshi actress
+Famous People,Siam Ahmed,Poran actor
+Famous People,Salman Shah,Iconic film star
+Famous People,Humayun Ahmed,Popular novelist
+Famous People,Jibanananda Das,Poet of Bengal
+Famous People,Satyajit Ray,Film director
+Famous People,Begum Rokeya,Women's education pioneer
+Famous People,Lalon Shah,Baul legend
+Famous People,Abdul Hamid,Former president
+Famous People,Sheikh Hasina,Former prime minister
+Famous People,Khaleda Zia,Former prime minister
+Famous People,Fazle Hasan Abed,BRAC founder
+Famous People,Sir Fazle Hasan Abed,Social development pioneer
+Famous People,Salman Khan,Bollywood superstar
+Famous People,Shah Rukh Khan,King of Bollywood
+Famous People,Aamir Khan,Mr Perfectionist
+Famous People,Amitabh Bachchan,Big B
+Famous People,Akshay Kumar,Khiladi
+Famous People,Hrithik Roshan,Greek God
+Famous People,Ranbir Kapoor,Rockstar actor
+Famous People,Ranveer Singh,Energetic Bollywood star
+Famous People,Ajay Devgn,Singham
+Famous People,Shahid Kapoor,Kabir Singh
+Famous People,Varun Dhawan,Bollywood actor
+Famous People,Kartik Aaryan,Monologue star
+Famous People,Allu Arjun,Pushpa
+Famous People,Prabhas,Baahubali
+Famous People,Ram Charan,RRR actor
+Famous People,Jr NTR,RRR actor
+Famous People,Rajinikanth,Thalaiva
+Famous People,Kamal Haasan,Indian cinema legend
+Famous People,Deepika Padukone,Bollywood actress
+Famous People,Alia Bhatt,Gangubai
+Famous People,Priyanka Chopra,Global Indian star
+Famous People,Katrina Kaif,Bollywood dancer
+Famous People,Kareena Kapoor,Poo
+Famous People,Kajol,DDLJ actress
+Famous People,Aishwarya Rai,Former Miss World
+Famous People,Madhuri Dixit,Dhak Dhak Girl
+Famous People,Anushka Sharma,Indian actress
+Famous People,Kiara Advani,Kabir Singh actress
+Famous People,Rashmika Mandanna,National crush
+Famous People,Nayanthara,Lady Superstar
+Famous People,Taylor Swift,Eras Tour
+Famous People,Michael Jackson,King of Pop
+Famous People,Justin Bieber,Baby singer
+Famous People,Ed Sheeran,Shape of You
+Famous People,Adele,Hello singer
+Famous People,Beyoncé,Queen Bey
+Famous People,Rihanna,Umbrella singer
+Famous People,Shakira,Waka Waka
+Famous People,Eminem,Rap God
+Famous People,Drake,Canadian rapper
+Famous People,Billie Eilish,Bad Guy
+Famous People,Bruno Mars,Uptown Funk
+Famous People,Lady Gaga,Poker Face
+Famous People,Ariana Grande,Thank U, Next
+Famous People,The Weeknd,Blinding Lights
+Famous People,Cristiano Ronaldo,CR7
+Famous People,Lionel Messi,World Cup winner
+Famous People,Neymar Jr.,Brazilian footballer
+Famous People,Kylian Mbappe,French football star
+Famous People,Erling Haaland,Goal machine
+Famous People,David Beckham,Famous free kicks
+Famous People,Diego Maradona,Hand of God
+Famous People,Pele,Brazilian football legend
+Famous People,Zinedine Zidane,Famous headbutt
+Famous People,Ronaldinho,Football magician
+Famous People,Mohamed Salah,Egyptian King
+Famous People,Harry Kane,English striker
+Famous People,Luis Suarez,Uruguayan striker
+Famous People,Luka Modric,Croatian midfielder
+Famous People,Virat Kohli,King Kohli
+Famous People,MS Dhoni,Captain Cool
+Famous People,Sachin Tendulkar,Little Master
+Famous People,Rohit Sharma,Hitman
+Famous People,Jasprit Bumrah,Yorker specialist
+Famous People,Babar Azam,Pakistani captain
+Famous People,Shaheen Afridi,Left-arm fast bowler
+Famous People,Wasim Akram,Sultan of Swing
+Famous People,Shoaib Akhtar,Rawalpindi Express
+Famous People,Ben Stokes,England all-rounder
+Famous People,Joe Root,English batsman
+Famous People,Tom Cruise,Mission Impossible
+Famous People,Leonardo DiCaprio,Titanic star
+Famous People,Brad Pitt,Hollywood actor
+Famous People,Johnny Depp,Jack Sparrow
+Famous People,Will Smith,Fresh Prince
+Famous People,Dwayne Johnson,The Rock
+Famous People,Robert Downey Jr.,Iron Man
+Famous People,Chris Hemsworth,Thor
+Famous People,Chris Evans,Captain America
+Famous People,Scarlett Johansson,Black Widow
+Famous People,Angelina Jolie,Lara Croft
+Famous People,Jennifer Lawrence,Katniss Everdeen
+Famous People,Keanu Reeves,John Wick
+Famous People,Jackie Chan,Martial arts legend
+Famous People,Bruce Lee,Kung Fu icon
+Famous People,Morgan Freeman,Famous narrator
+Famous People,Emma Watson,Hermione
+Famous People,Daniel Radcliffe,Harry Potter
+Famous People,Ryan Reynolds,Deadpool
+Famous People,Jim Carrey,The Mask
+Famous People,Albert Einstein,Theory of relativity
+Famous People,Isaac Newton,Laws of motion
+Famous People,Stephen Hawking,Black holes
+Famous People,Nikola Tesla,Alternating current
+Famous People,Thomas Edison,Light bulb
+Famous People,Marie Curie,Radioactivity
+Famous People,Charles Darwin,Evolution theory
+Famous People,Galileo Galilei,Father of modern science
+Famous People,Elon Musk,Tesla and SpaceX
+Famous People,Bill Gates,Microsoft founder
+Famous People,Steve Jobs,Apple co-founder
+Famous People,Mark Zuckerberg,Facebook founder
+Famous People,Jeff Bezos,Amazon founder
+Famous People,Sundar Pichai,Google CEO
+Famous People,Warren Buffett,Famous investor
+Famous People,Donald Trump,American president
+Famous People,Barack Obama,First Black US president
+Famous People,Abraham Lincoln,Emancipation Proclamation
+Famous People,Nelson Mandela,Anti-apartheid leader
+Famous People,Mahatma Gandhi,Non-violence
+Famous People,Martin Luther King Jr.,I Have a Dream
+Famous People,Queen Elizabeth II,Britain's longest-serving monarch
+Famous People,Princess Diana,People's Princess
+Famous People,Cleopatra,Egyptian queen
+Famous People,Napoleon Bonaparte,French emperor
+Famous People,Julius Caesar,Roman leader
+Famous People,Christopher Columbus,Transatlantic explorer
+Famous People,Neil Armstrong,First man on the Moon
+Famous People,Yuri Gagarin,First human in space
+Famous People,Malala Yousafzai,Girls' education activist
+Famous People,Mother Teresa,Missionaries of Charity
+Famous People,Pablo Picasso,Cubist painter
+Famous People,Vincent van Gogh,Starry Night
+Famous People,William Shakespeare,Romeo and Juliet
+Famous People,Rabindranath Tagore,Gitanjali
+Famous People,Kazi Nazrul Islam,Rebel poet
+Famous People,Amartya Sen,Nobel-winning economist
+Famous People,Muhammad Ali,Greatest boxer
+Famous People,Mike Tyson,Iron Mike
+Famous People,Roger Federer,Swiss tennis legend
+Animals,Royal Bengal Tiger,National animal of Bangladesh
+Animals,Lion,King of the jungle
+Animals,Leopard,Spotted big cat
+Animals,Cheetah,Fastest land animal
+Animals,Jaguar,Powerful American cat
+Animals,Snow Leopard,Mountain predator
+Animals,Black Panther,Dark-coloured big cat
+Animals,Lynx,Tufted ears
+Animals,Domestic Cat,Popular household pet
+Animals,Persian Cat,Flat-faced pet
+Animals,Siamese Cat,Blue eyes
+Animals,Dog,Man's best friend
+Animals,German Shepherd,Police dog
+Animals,Golden Retriever,Friendly family dog
+Animals,Labrador,Loves swimming
+Animals,Bulldog,Wrinkled face
+Animals,Poodle,Curly-haired dog
+Animals,Husky,Snow-loving dog
+Animals,Rottweiler,Powerful guard dog
+Animals,Dalmatian,Black spots
+Animals,Fox,Clever forest animal
+Animals,Arctic Fox,White winter coat
+Animals,Wolf,Howls at the moon
+Animals,Red Wolf,Rare wild canine
+Animals,Jackal,Scavenger
+Animals,Coyote,North American wild canine
+Animals,Hyena,Laughing scavenger
+Animals,Spotted Hyena,Powerful jaws
+Animals,Elephant,Long trunk
+Animals,African Elephant,Largest land animal
+Animals,Asian Elephant,Smaller than African cousin
+Animals,Mammoth,Ancient hairy giant
+Animals,Rhinoceros,Horn on its nose
+Animals,Hippopotamus,River giant
+Animals,Giraffe,Longest neck
+Animals,Zebra,Black and white stripes
+Animals,Horse,Riding animal
+Animals,Donkey,Long ears
+Animals,Mule,Horse and donkey cross
+Animals,Camel,Desert traveller
+Animals,Llama,South American pack animal
+Animals,Alpaca,Soft wool
+Animals,Cow,Gives milk
+Animals,Buffalo,Powerful farm animal
+Animals,Goat,Climbs rocky hills
+Animals,Sheep,Wool producer
+Animals,Ram,Male sheep
+Animals,Deer,Antlers
+Animals,Reindeer,Christmas sleigh
+Animals,Moose,Huge antlers
+Animals,Elk,Large deer
+Animals,Antelope,Fast grassland runner
+Animals,Gazelle,Graceful jumper
+Animals,Kangaroo,Carries babies in a pouch
+Animals,Koala,Eucalyptus leaves
+Animals,Panda,Loves bamboo
+Animals,Red Panda,Reddish furry animal
+Animals,Sloth,Moves very slowly
+Animals,Monkey,Climbs trees
+Animals,Chimpanzee,Uses simple tools
+Animals,Gorilla,Powerful great ape
+Animals,Orangutan,Red-haired ape
+Animals,Baboon,Long dog-like face
+Animals,Lemur,Ringed tail
+Animals,Mandrill,Colourful face
+Animals,Squirrel,Stores nuts
+Animals,Flying Squirrel,Glides between trees
+Animals,Rabbit,Long ears
+Animals,Hare,Fast wild rabbit relative
+Animals,Mouse,Small house visitor
+Animals,Rat,Long-tailed rodent
+Animals,Hamster,Stores food in cheeks
+Animals,Guinea Pig,Popular small pet
+Animals,Porcupine,Sharp quills
+Animals,Hedgehog,Spiky little mammal
+Animals,Beaver,Builds dams
+Animals,Otter,Playful water mammal
+Animals,Sea Otter,Uses stones to open shells
+Animals,Badger,Underground digger
+Animals,Raccoon,Mask-like face
+Animals,Skunk,Strong-smelling defence
+Animals,Meerkat,Stands upright
+Animals,Mongoose,Snake hunter
+Animals,Weasel,Small slender predator
+Animals,Bat,Sleeps upside down
+Animals,Vampire Bat,Drinks blood
+Animals,Platypus,Egg-laying mammal
+Animals,Echidna,Spiny egg-laying mammal
+Animals,Polar Bear,Arctic hunter
+Animals,Grizzly Bear,North American giant
+Animals,Black Bear,Forest omnivore
+Animals,Sun Bear,Chest marking
+Animals,Sloth Bear,Eats termites
+Animals,Meerkat,Desert group animal
+Animals,Tasmanian Devil,Loud-mouthed marsupial
+Animals,Wombat,Square-shaped droppings
+Animals,Armadillo,Natural body armour
+Animals,Anteater,Long sticky tongue
+Animals,Aardvark,Night-time termite eater
+Animals,Tapir,Short trunk-like nose
+Animals,Dolphin,Intelligent sea mammal
+Animals,Bottlenose Dolphin,Famous smiling face
+Animals,Blue Whale,Largest animal on Earth
+Animals,Humpback Whale,Famous songs
+Animals,Killer Whale,Orca
+Animals,Sperm Whale,Deep-diving giant
+Animals,Shark,Sharp rows of teeth
+Animals,Great White Shark,Ocean predator
+Animals,Hammerhead Shark,Unusual head shape
+Animals,Whale Shark,Largest fish
+Animals,Tiger Shark,Eats many things
+Animals,Stingray,Flat sea creature
+Animals,Manta Ray,Underwater wings
+Animals,Swordfish,Long pointed bill
+Animals,Tuna,Popular canned fish
+Animals,Salmon,Swims upstream
+Animals,Eel,Snake-like fish
+Animals,Catfish,Whisker-like barbels
+Animals,Goldfish,Common aquarium fish
+Animals,Clownfish,Lives among sea anemones
+Animals,Seahorse,Male carries babies
+Animals,Pufferfish,Inflates when threatened
+Animals,Flying Fish,Glides above water
+Animals,Barracuda,Fast marine predator
+Animals,Octopus,Eight arms
+Animals,Squid,Ink defence
+Animals,Cuttlefish,Changes colour
+Animals,Jellyfish,Stinging tentacles
+Animals,Starfish,Five-armed sea animal
+Animals,Sea Urchin,Spiny ocean creature
+Animals,Crab,Walks sideways
+Animals,Hermit Crab,Lives in borrowed shells
+Animals,Lobster,Large sea crustacean
+Animals,Shrimp,Small seafood
+Animals,Prawn,Bigger than many shrimp
+Animals,Crocodile,Powerful jaw
+Animals,Alligator,Broad rounded snout
+Animals,Gharial,Long narrow snout
+Animals,Komodo Dragon,Giant monitor lizard
+Animals,Chameleon,Changes skin colour
+Animals,Gecko,Sticks to walls
+Animals,Iguana,Spiny-backed lizard
+Animals,Monitor Lizard,Large Bengal reptile
+Animals,Python,Non-venomous constrictor
+Animals,Cobra,Expands its hood
+Animals,King Cobra,World's longest venomous snake
+Animals,Anaconda,Giant South American snake
+Animals,Rattlesnake,Warning tail sound
+Animals,Viper,Venomous snake
+Animals,Sea Turtle,Ocean traveller
+Animals,Tortoise,Slow land reptile
+Animals,Frog,Jumps and croaks
+Animals,Tree Frog,Lives on branches
+Animals,Toad,Dry, bumpy skin
+Animals,Salamander,Regenerates body parts
+Animals,Newt,Small aquatic amphibian
+Animals,Axolotl,Smiling aquatic animal
+Animals,Peacock,Colourful tail feathers
+Animals,Eagle,Powerful eyesight
+Animals,Owl,Night-time hunter
+History,Titanic,Sank in the ocean
+History,Napoleon,French military leader
+History,Cleopatra,Queen of Egypt
+History,Julius Caesar,Roman ruler
+History,Alexander the Great,Famous conqueror
+History,Albert Einstein,Theory of relativity
+History,Isaac Newton,Gravity
+History,Leonardo da Vinci,Mona Lisa
+History,Christopher Columbus,Discovered America
+History,Marco Polo,Traveller
+History,Mahatma Gandhi,Non-violence
+History,Nelson Mandela,South African leader
+History,Abraham Lincoln,American president
+History,Adolf Hitler,World War II
+History,Winston Churchill,British wartime leader
+History,Queen Victoria,British monarch
+History,Shakespeare,Famous playwright
+History,Rabindranath Tagore,Nobel Prize
+History,Kazi Nazrul Islam,Rebel poet
+History,Sheikh Mujibur Rahman,Father of the Nation
+History,A. K. Fazlul Huq,Sher-e-Bangla
+History,Language Movement,Mother tongue
+History,21 February,International Mother Language Day
+History,Liberation War,1971
+History,7 March Speech,Historic address
+History,National Martyrs' Memorial,Savar
+History,Battle of Plassey,British victory
+History,Mughal Empire,Red Fort
+History,Taj Mahal,Symbol of love
+History,Great Wall of China,Ancient defence
+History,Pyramids of Egypt,Ancient tombs
+History,World War I,1914
+History,World War II,1939
+History,Cold War,USA vs USSR
+History,French Revolution,Liberty and equality
+History,Industrial Revolution,Machines and factories
+History,Renaissance,Rebirth of art
+History,Ottoman Empire,Istanbul
+History,Roman Empire,Gladiators
+History,Byzantine Empire,Constantinople
+History,British Empire,Colonial rule
+History,East India Company,British traders
+History,Vasco da Gama,Sea route to India
+History,Wright Brothers,First powered flight
+History,Thomas Edison,Light bulb
+History,Alexander Graham Bell,Telephone
+History,Marie Curie,Radioactivity
+History,Charles Darwin,Evolution
+History,Galileo Galilei,Telescope
+History,Martin Luther King Jr.,I Have a Dream
+History,Rosa Parks,Bus protest
+History,Mother Teresa,Humanitarian work
+History,Joan of Arc,French heroine
+History,Genghis Khan,Mongol Empire
+History,Attila the Hun,Warrior king
+History,King Tut,Egyptian pharaoh
+History,Socrates,Greek philosopher
+History,Plato,The Republic
+History,Aristotle,Greek thinker
+History,Archimedes,Eureka
+History,Florence Nightingale,Lady with the Lamp
+History,Harriet Tubman,Underground Railroad
+History,Amelia Earhart,Female aviator
+History,Yuri Gagarin,First human in space
+History,Neil Armstrong,First Moon landing
+History,Apollo 11,Moon mission
+History,Sputnik 1,First artificial satellite
+History,Berlin Wall,Divided Germany
+History,Hiroshima,Atomic bombing
+History,Pearl Harbor,Surprise attack
+History,Magna Carta,English charter
+History,Ottoman Sultan Suleiman,The Magnificent
+History,Indus Valley Civilization,Ancient urban life
+History,Mayan Civilization,Ancient calendar
+School Life,Blackboard,Written with chalk
+School Life,Whiteboard,Marker writing
+School Life,Chalk,Used by teachers
+School Life,Duster,Cleans the board
+School Life,School Bell,Announces periods
+School Life,Attendance,Present or absent
+School Life,Homework,Work after school
+School Life,Examination,Tests knowledge
+School Life,Report Card,Academic results
+School Life,School Uniform,Same clothes
+School Life,Tie,Part of uniform
+School Life,School Bag,Carries books
+School Life,Pencil Box,Keeps stationery
+School Life,Geometry Box,Mathematical tools
+School Life,Calculator,Solves calculations
+School Life,Ruler,Measures length
+School Life,Compass,Draws circles
+School Life,Protractor,Measures angles
+School Life,Eraser,Removes mistakes
+School Life,Sharpener,Makes pencils pointed
+School Life,Highlighter,Marks important text
+School Life,Notebook,Written notes
+School Life,Textbook,Subject lessons
+School Life,Dictionary,Word meanings
+School Life,Globe,Model of Earth
+School Life,Map,Shows locations
+School Life,Atlas,Collection of maps
+School Life,Microscope,Sees tiny objects
+School Life,Telescope,Observes distant objects
+School Life,Laboratory,Practical experiments
+School Life,Science Fair,Student projects
+School Life,Library,Borrowing books
+School Life,Librarian,Manages books
+School Life,Principal,School head
+School Life,Headmaster,Leads the school
+School Life,Class Teacher,Manages a class
+School Life,Class Monitor,Helps the teacher
+School Life,Prefect,Student leader
+School Life,Class Captain,Leads classmates
+School Life,Bench,Student seating
+School Life,Desk,Writing surface
+School Life,Black Pen,Writing tool
+School Life,Red Pen,Checking answers
+School Life,Fountain Pen,Ink writing
+School Life,School Diary,Daily records
+School Life,Timetable,Class schedule
+School Life,Assembly,Morning gathering
+School Life,National Anthem,School ceremony
+School Life,Prayer,Morning routine
+School Life,Recess,Short break
+School Life,Tiffin Box,Packed lunch
+School Life,Water Bottle,Drinking water
+School Life,Playground,Outdoor activities
+School Life,Football,Popular school sport
+School Life,Cricket Bat,Sports equipment
+School Life,Annual Sports,School competition
+School Life,Prize Giving,Award ceremony
+School Life,Debate Competition,Argument with rules
+School Life,Quiz Competition,General knowledge
+School Life,Science Club,Experiments and ideas
+School Life,Cultural Program,Music and dance
+School Life,Farewell Party,Last school celebration
+School Life,Picnic,Outdoor school trip
+School Life,Study Tour,Educational journey
+School Life,Detention,Staying after class
+School Life,Punishment,Breaking school rules
+School Life,Late Slip,Arriving late
+School Life,Transfer Certificate,Leaving a school
+School Life,Admission Test,Entry examination
+School Life,Viva,Oral examination
+School Life,Practical Exam,Demonstration of skills
+School Life,Board Exam,Public examination
+School Life,GPA,Academic grading
+School Life,Golden A+,Excellent result
+School Life,Graduation,Completing education
+Household,Refrigerator,Keeps food cold
+Household,Microwave Oven,Heats food quickly
+Household,Rice Cooker,Cooks rice
+Household,Pressure Cooker,Fast cooking
+Household,Blender,Mixes ingredients
+Household,Electric Kettle,Boils water
+Household,Toaster,Makes bread crispy
+Household,Gas Stove,Cooking flame
+Household,Induction Cooker,Electric cooking
+Household,Air Conditioner,Cools a room
+Household,Ceiling Fan,Rotating blades
+Household,Table Fan,Portable cooling
+Household,Washing Machine,Cleans clothes
+Household,Iron,Removes wrinkles
+Household,Vacuum Cleaner,Removes dust
+Household,Television,Entertainment screen
+Household,Remote Control,Changes channels
+Household,Wi-Fi Router,Internet connection
+Household,Laptop,Portable computer
+Household,Smartphone,Everyday communication
+Household,Power Bank,Portable charging
+Household,Extension Cord,Multiple sockets
+Household,LED Bulb,Energy-saving light
+Household,Torchlight,Portable illumination
+Household,Wall Clock,Shows time
+Household,Alarm Clock,Morning wake-up
+Household,Mirror,Shows reflection
+Household,Dressing Table,Getting ready
+Household,Wardrobe,Stores clothes
+Household,Bookshelf,Stores books
+Household,Shoe Rack,Organises footwear
+Household,Dining Table,Family meals
+Household,Sofa,Living room seating
+Household,Armchair,Single-person seating
+Household,Bed,Sleeping place
+Household,Mattress,Soft sleeping surface
+Household,Pillow,Head support
+Household,Blanket,Keeps you warm
+Household,Bedsheet,Covers the mattress
+Household,Curtain,Covers windows
+Household,Carpet,Floor decoration
+Household,Doormat,Cleans shoes
+Household,Hanger,Holds clothes
+Household,Laundry Basket,Dirty clothes
+Household,Dustbin,Waste collection
+Household,Broom,Sweeps the floor
+Household,Mop,Cleans the floor
+Household,Bucket,Holds water
+Household,Mug,Bathroom water container
+Household,Shower,Water from above
+Household,Bathtub,Used for bathing
+Household,Toothbrush,Cleans teeth
+Household,Toothpaste,Dental cleaning
+Household,Hair Dryer,Dries wet hair
+Household,Comb,Arranges hair
+Household,Shaving Razor,Removes facial hair
+Household,Towel,Dries the body
+Household,Soap,Body cleaning
+Household,Shampoo,Washes hair
+Household,Dishwashing Liquid,Cleans plates
+Household,Frying Pan,Fries food
+Household,Saucepan,Heats liquid
+Household,Spatula,Flips food
+Household,Knife,Cuts ingredients
+Household,Cutting Board,Chopping surface
+Household,Rice Strainer,Drains water
+Household,Pressure Flask,Keeps drinks hot
+Household,Water Filter,Cleans drinking water
+Household,Sewing Machine,Stitches clothes
+Household,First Aid Box,Emergency supplies
+Household,Fire Extinguisher,Controls fire
+Household,Doorbell,Announces visitors
+Household,Padlock,Secures a door
+Household,CCTV Camera,Watches surroundings
+Household,Mosquito Net,Prevents mosquito bites
+Household,Flower Vase,Holds flowers
+Movies,Shah Rukh Khan,King of Romance
+Movies,Salman Khan,Bhaijaan
+Movies,Aamir Khan,Mr. Perfectionist
+Movies,Amitabh Bachchan,Big B
+Movies,Akshay Kumar,Khiladi
+Movies,Hrithik Roshan,Greek God
+Movies,Ranbir Kapoor,Animal
+Movies,Ranveer Singh,Energetic actor
+Movies,Deepika Padukone,Pathaan actress
+Movies,Alia Bhatt,Gangubai
+Movies,Priyanka Chopra,Global star
+Movies,Katrina Kaif,Bollywood dancer
+Movies,Kareena Kapoor,Poo
+Movies,Kajol,DDLJ actress
+Movies,Aishwarya Rai,Miss World
+Movies,Madhuri Dixit,Dhak Dhak Girl
+Movies,Shahid Kapoor,Kabir Singh
+Movies,Varun Dhawan,Student of the Year
+Movies,Rajinikanth,Superstar
+Movies,Kamal Haasan,Versatile actor
+Movies,Tom Cruise,Mission Impossible
+Movies,Leonardo DiCaprio,Titanic actor
+Movies,Brad Pitt,Fight Club
+Movies,Johnny Depp,Captain Jack Sparrow
+Movies,Will Smith,Men in Black
+Movies,Dwayne Johnson,The Rock
+Movies,Robert Downey Jr.,Iron Man
+Movies,Chris Hemsworth,Thor
+Movies,Chris Evans,Captain America
+Movies,Scarlett Johansson,Black Widow
+Movies,Angelina Jolie,Tomb Raider
+Movies,Jennifer Lawrence,The Hunger Games
+Movies,Keanu Reeves,John Wick
+Movies,Jackie Chan,Martial arts comedy
+Movies,Bruce Lee,Kung Fu legend
+Movies,Morgan Freeman,Famous narrator
+Movies,Emma Watson,Hermione
+Movies,Daniel Radcliffe,Harry Potter
+Movies,Ryan Reynolds,Deadpool
+Movies,Jim Carrey,The Mask
+Movies,Titanic,Ship tragedy
+Movies,3 Idiots,All Is Well
+Movies,Dangal,Wrestling sisters
+Movies,PK,Alien visitor
+Movies,Bajrangi Bhaijaan,Lost Pakistani girl
+Movies,Sholay,Jai and Veeru
+Movies,Dilwale Dulhania Le Jayenge,Train scene
+Movies,Kabhi Khushi Kabhie Gham,Family drama
+Movies,Chennai Express,Train journey
+Movies,Pathaan,Spy action
+Movies,Jawan,Double identity
+Movies,Animal,Father-son conflict
+Movies,RRR,Two revolutionaries
+Movies,Baahubali,Who is Kattappa?
+Movies,Pushpa,Red sandalwood
+Movies,KGF,Gold mines
+Movies,12th Fail,UPSC dream
+Movies,3 Idiots,Engineering students
+Movies,The Dark Knight,Gotham City
+Movies,Inception,Dreams within dreams
+Movies,Interstellar,Space and time
+Movies,Avatar,Blue aliens
+Movies,Avengers: Endgame,Final battle
+Movies,Spider-Man,Friendly neighbourhood hero
+Movies,Iron Man,High-tech suit
+Movies,Jurassic Park,Dinosaur island
+Movies,Harry Potter,Wizard school
+Movies,The Lion King,Hakuna Matata
+Movies,Frozen,Let It Go
+Movies,Finding Nemo,Lost fish
+Movies,The Conjuring,Haunted house
+Movies,Home Alone,Christmas alone
+Movies,Fast & Furious,Street racing
+Movies,Mission: Impossible,Secret agent
+Movies,The Matrix,Red pill or blue pill
+

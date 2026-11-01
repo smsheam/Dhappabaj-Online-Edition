@@ -1,6 +1,21 @@
 import { CategoryId, WordItem, RoundScoreDetail } from './game';
 
-export type RoomStatus = 'waiting' | 'in_progress' | 'ended';
+export type RoomStatus =
+  | 'WAITING'
+  | 'PLAYING'
+  | 'CLOSED'
+  | 'EXPIRED'
+  | 'waiting'
+  | 'in_progress'
+  | 'ended';
+
+export type RoomClosedReason =
+  | 'host_left'
+  | 'host_disconnected'
+  | 'empty_room'
+  | 'inactivity_timeout'
+  | 'game_completed'
+  | null;
 
 export type OnlineGamePhase =
   | 'LOBBY'
@@ -14,10 +29,11 @@ export type OnlineGamePhase =
   | 'GAME_OVER';
 
 export interface RoomSettings {
-  maxPlayers: number; // 4 - 10
+  maxPlayers: number; // 3 - 10
   imposterCount: 1 | 2;
-  discussionTimer: number; // 60, 90, 120
-  votingTimer: number; // 30, 45, 60
+  clueTimer: number; // 20, 30, 45, 60 (default 30s)
+  discussionTimer: number; // 45, 60, 90, 120 (default 90s)
+  votingTimer: number; // 20, 30, 45, 60 (default 30s)
   language: 'bn' | 'en' | 'mixed';
   selectedCategories: CategoryId[];
   imposterFinalGuess: boolean;
@@ -26,6 +42,7 @@ export interface RoomSettings {
 
 export interface OnlinePlayer {
   id: string; // Firebase Auth UID
+  sessionToken?: string; // Token to safely reconnect from same client
   name: string;
   avatar: string;
   avatarColor: string;
@@ -35,6 +52,7 @@ export interface OnlinePlayer {
   isHost: boolean;
   score: number;
   hasVoted: boolean;
+  hasSeenCard?: boolean; // Track who confirmed viewing secret card
   clue?: string;
   connectionStatus: 'online' | 'offline';
   joinedAt: number;
@@ -56,7 +74,9 @@ export interface PrivatePlayerRole {
 export interface OnlineRoomData {
   roomCode: string;
   hostId: string;
+  hostSessionToken?: string;
   status: RoomStatus;
+  closedReason?: RoomClosedReason;
   currentPhase: OnlineGamePhase;
   currentRound: number;
   totalRounds: number;
@@ -76,10 +96,22 @@ export interface OnlineRoomData {
   scoreDetails?: RoundScoreDetail[];
   createdAt: number;
   updatedAt: number;
+  lastActivityAt: number; // 5 min inactivity tracking
+  hostDisconnectedAt?: number | null; // 30s grace period for host disconnect
 }
 
 export interface OnlineVote {
   voterId: string;
   suspectId: string;
+  timestamp: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar: string;
+  senderColor?: string;
+  text: string;
   timestamp: number;
 }

@@ -108,16 +108,39 @@ export const OnlineScoreboardScreen: React.FC<OnlineScoreboardScreenProps> = ({
       {/* Round Score Breakdown (Details) */}
       {room.scoreDetails && room.scoreDetails.length > 0 && (
         <div className="mb-4 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs space-y-2">
-          <div className="font-bold text-slate-600 dark:text-slate-300">
-            {isEn ? 'This Round Points Delta:' : 'এই রাউন্ডের পয়েন্ট হিসাব:'}
+          <div className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+            <span>{isEn ? 'Round Points Breakdown & Reasons:' : 'রাউন্ডের পয়েন্ট ও অর্জনের কারণ:'}</span>
+            <span className="text-[10px] text-slate-400 font-normal">
+              {isEn ? `Round ${room.currentRound}` : `${room.currentRound}ম রাউন্ড`}
+            </span>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1.5 max-h-[22vh] overflow-y-auto">
             {room.scoreDetails.map((detail) => (
-              <div key={detail.playerId} className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-950">
-                <span className="truncate font-semibold">{detail.playerName}:</span>
-                <span className={`font-mono font-bold ${detail.pointsDelta >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                  {detail.pointsDelta >= 0 ? `+${detail.pointsDelta}` : detail.pointsDelta}
-                </span>
+              <div
+                key={detail.playerId}
+                className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 flex flex-col gap-1 border border-slate-200/50 dark:border-slate-800/50"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="truncate font-bold text-slate-900 dark:text-white">
+                    {detail.playerName}:
+                  </span>
+                  <span
+                    className={`font-mono font-bold px-2 py-0.5 rounded-lg text-xs ${
+                      detail.pointsDelta >= 0
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+                    }`}
+                  >
+                    {detail.pointsDelta >= 0 ? `+${detail.pointsDelta}` : detail.pointsDelta} {isEn ? 'pts' : 'পয়েন্ট'}
+                  </span>
+                </div>
+                {detail.reasons && detail.reasons.length > 0 && (
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap gap-x-2">
+                    {detail.reasons.map((r, rIdx) => (
+                      <span key={rIdx}>• {isEn ? r.en : r.bn}</span>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -17,6 +17,8 @@ import {
   RoomSettings,
   OnlineVote,
   OnlineGamePhase,
+  ChatMessage,
+  RoomClosedReason,
 } from '../types/multiplayer';
 import { WordItem, CategoryId } from '../types/game';
 import { pickRandomWord, ALL_WORDS } from '../data/words';
@@ -25,6 +27,10 @@ import { generatePlayerTitles, SCENE_PACKS } from '../data/titles';
 
 const ROOM_CODE_CHARACTERS = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const CODE_LENGTH = 6;
+
+// Inactivity limits
+export const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+export const HOST_DISCONNECT_GRACE_MS = 30 * 1000; // 30 seconds
 
 const AVATAR_COLORS = [
   'bg-amber-500',
@@ -48,6 +54,10 @@ export function generateRandomCode(): string {
   return code;
 }
 
+export function generateSessionToken(prefix: string = 'st'): string {
+  return `${prefix}_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
+}
+
 // Recursively strips or converts undefined fields so Firestore never throws 'Unsupported field value: undefined'
 export function sanitizeForFirestore<T>(obj: T): T {
   if (obj === null || obj === undefined) return null as unknown as T;
@@ -59,29 +69,67 @@ export function sanitizeForFirestore<T>(obj: T): T {
 export const DEFAULT_ONLINE_SETTINGS: RoomSettings = {
   maxPlayers: 8,
   imposterCount: 1,
+  clueTimer: 30,
   discussionTimer: 90,
-  votingTimer: 45,
+  votingTimer: 30,
   language: 'mixed',
   selectedCategories: ['food', 'people', 'object', 'animal'],
   imposterFinalGuess: true,
   totalRounds: 3,
 };
 
-// Create a new room
+// 1. Create a new room with collision avoidance & session tokens
 export async function createOnlineRoom(
   playerName: string,
   playerAvatar: string = '🕵️'
-): Promise<{ roomCode: string; player: OnlinePlayer }> {
+): Promise<{ roomCode: string; player: OnlinePlayer; roomData: OnlineRoomData }> {
   const user = await ensureAuthenticatedUser();
-  const roomCode = generateRandomCode();
+
+  // Best-effort cleanup of any previously active room created by this host in current browser session
+  const previousRoomCode = sessionStorage.getItem('dhappabaj_active_room');
+  if (previousRoomCode) {
+    try {
+      const prevRef = doc(db, 'rooms', previousRoomCode);
+      const prevSnap = await getDoc(prevRef);
+      if (prevSnap.exists()) {
+        const prevData = prevSnap.data() as OnlineRoomData;
+        if (prevData.hostId === user.uid && (prevData.status === 'WAITING' || (prevData.status as string) === 'waiting')) {
+          await updateDoc(prevRef, {
+            status: 'CLOSED',
+            closedReason: 'host_left',
+            updatedAt: Date.now(),
+          });
+        }
+      }
+    } catch {
+      // Ignore errors when cleaning previous room
+    }
+    sessionStorage.removeItem(`dhappabaj_host_token_${previousRoomCode}`);
+    sessionStorage.removeItem('dhappabaj_active_room');
+  }
+
+  // Generate unique code with collision safety
+  let roomCode = generateRandomCode();
+  let attempts = 0;
+  while (attempts < 5) {
+    const checkSnap = await getDoc(doc(db, 'rooms', roomCode));
+    if (!checkSnap.exists()) break;
+    roomCode = generateRandomCode();
+    attempts++;
+  }
+
   const roomRef = doc(db, 'rooms', roomCode);
+  const hostSessionToken = generateSessionToken('hst');
+  const now = Date.now();
 
   const initialSettings = { ...DEFAULT_ONLINE_SETTINGS };
 
   const initialRoom: OnlineRoomData = {
     roomCode,
     hostId: user.uid,
-    status: 'waiting',
+    hostSessionToken,
+    status: 'WAITING',
+    closedReason: null,
     currentPhase: 'LOBBY',
     currentRound: 1,
     totalRounds: initialSettings.totalRounds,
@@ -89,12 +137,15 @@ export async function createOnlineRoom(
     settings: initialSettings,
     phaseEndsAt: null,
     usedWordIds: [],
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
+    createdAt: now,
+    updatedAt: now,
+    lastActivityAt: now,
+    hostDisconnectedAt: null,
   };
 
   const initialPlayer: OnlinePlayer = {
     id: user.uid,
+    sessionToken: hostSessionToken,
     name: playerName.trim() || 'Host',
     avatar: playerAvatar,
     avatarColor: AVATAR_COLORS[0],
@@ -104,26 +155,32 @@ export async function createOnlineRoom(
     isHost: true,
     score: 0,
     hasVoted: false,
+    hasSeenCard: false,
     connectionStatus: 'online',
-    joinedAt: Date.now(),
-    lastSeenAt: Date.now(),
+    joinedAt: now,
+    lastSeenAt: now,
   };
 
   try {
     const batch = writeBatch(db);
-    batch.set(roomRef, initialRoom);
+    batch.set(roomRef, sanitizeForFirestore(initialRoom));
     const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
-    batch.set(playerRef, initialPlayer);
+    batch.set(playerRef, sanitizeForFirestore(initialPlayer));
     await batch.commit();
 
-    return { roomCode, player: initialPlayer };
+    // Store session tokens locally
+    sessionStorage.setItem(`dhappabaj_host_token_${roomCode}`, hostSessionToken);
+    sessionStorage.setItem('dhappabaj_active_room', roomCode);
+    sessionStorage.setItem('dhappabaj_player_id', user.uid);
+
+    return { roomCode, player: initialPlayer, roomData: initialRoom };
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, `rooms/${roomCode}`);
     throw error;
   }
 }
 
-// Join an existing room
+// 2. Join an existing room with validation, closed/expired rejection & reconnection
 export async function joinOnlineRoom(
   roomCodeInput: string,
   playerName: string,
@@ -150,6 +207,34 @@ export async function joinOnlineRoom(
   }
 
   const roomData = roomSnap.data() as OnlineRoomData;
+  const now = Date.now();
+
+  // Strict check: Status must not be CLOSED or EXPIRED
+  const isClosedStatus =
+    roomData.status === 'CLOSED' ||
+    roomData.status === 'EXPIRED' ||
+    (roomData.status as string) === 'closed' ||
+    (roomData.status as string) === 'expired' ||
+    (roomData.status as string) === 'ended';
+
+  if (isClosedStatus) {
+    throw new Error('এই রুমটি আর চালু নেই। নতুন একটি রুমে যোগ দিন।');
+  }
+
+  // Check 5-minute inactivity timeout
+  const lastActive = roomData.lastActivityAt || roomData.updatedAt || roomData.createdAt || 0;
+  if (now - lastActive > INACTIVITY_TIMEOUT_MS) {
+    try {
+      await updateDoc(roomRef, {
+        status: 'EXPIRED',
+        closedReason: 'inactivity_timeout',
+        updatedAt: now,
+      });
+    } catch {
+      // Ignore update error on expired check
+    }
+    throw new Error('এই রুমটি আর চালু নেই। নতুন একটি রুমে যোগ দিন।');
+  }
 
   // Fetch current players
   const playersColl = collection(db, 'rooms', roomCode, 'players');
@@ -159,20 +244,46 @@ export async function joinOnlineRoom(
   // Check if player is already in this room (reconnection)
   const existingSelf = existingPlayers.find((p) => p.id === user.uid);
   if (existingSelf) {
-    // Player is reconnecting! Update connection status
+    const isHost = existingSelf.isHost || user.uid === roomData.hostId;
     const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
-    await updateDoc(playerRef, {
+
+    const playerUpdates: Record<string, any> = {
       connectionStatus: 'online',
-      lastSeenAt: Date.now(),
-    });
-    return {
-      roomData,
-      player: { ...existingSelf, connectionStatus: 'online' },
+      lastSeenAt: now,
     };
+
+    const roomUpdates: Record<string, any> = {
+      lastActivityAt: now,
+      updatedAt: now,
+    };
+
+    // If host is reconnecting, clear disconnection window
+    if (isHost && roomData.hostDisconnectedAt) {
+      roomUpdates.hostDisconnectedAt = null;
+    }
+
+    try {
+      const batch = writeBatch(db);
+      batch.update(playerRef, playerUpdates);
+      batch.update(roomRef, roomUpdates);
+      await batch.commit();
+
+      sessionStorage.setItem('dhappabaj_active_room', roomCode);
+      sessionStorage.setItem('dhappabaj_player_id', user.uid);
+
+      return {
+        roomData: { ...roomData, ...roomUpdates },
+        player: { ...existingSelf, connectionStatus: 'online', lastSeenAt: now },
+      };
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `rooms/${roomCode}`);
+      throw err;
+    }
   }
 
-  // If game is in progress or ended, reject new players
-  if (roomData.status !== 'waiting') {
+  // If game is in progress or ended, reject brand-new players
+  const isWaiting = roomData.status === 'WAITING' || (roomData.status as string) === 'waiting';
+  if (!isWaiting) {
     throw new Error('খেলাটি ইতিমধ্যে শুরু হয়ে গেছে (Game is already in progress)');
   }
 
@@ -189,9 +300,11 @@ export async function joinOnlineRoom(
   const colorIndex = existingPlayers.length % AVATAR_COLORS.length;
   const titles = generatePlayerTitles(existingPlayers.length + 1, SCENE_PACKS[0].id).titles;
   const assignedTitle = titles[existingPlayers.length] || { bn: 'নাগরিক', en: 'Citizen' };
+  const playerSessionToken = generateSessionToken('pst');
 
   const newPlayer: OnlinePlayer = {
     id: user.uid,
+    sessionToken: playerSessionToken,
     name: finalName,
     avatar: playerAvatar,
     avatarColor: AVATAR_COLORS[colorIndex],
@@ -201,24 +314,237 @@ export async function joinOnlineRoom(
     isHost: false,
     score: 0,
     hasVoted: false,
+    hasSeenCard: false,
     connectionStatus: 'online',
-    joinedAt: Date.now(),
-    lastSeenAt: Date.now(),
+    joinedAt: now,
+    lastSeenAt: now,
   };
 
   try {
     const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
-    await setDoc(playerRef, newPlayer);
-    await updateDoc(roomRef, {
+    const batch = writeBatch(db);
+    batch.set(playerRef, sanitizeForFirestore(newPlayer));
+    batch.update(roomRef, {
       playerCount: existingPlayers.length + 1,
-      updatedAt: Date.now(),
+      lastActivityAt: now,
+      updatedAt: now,
     });
+    await batch.commit();
 
-    return { roomData, player: newPlayer };
+    sessionStorage.setItem('dhappabaj_active_room', roomCode);
+    sessionStorage.setItem('dhappabaj_player_id', user.uid);
+    sessionStorage.setItem(`dhappabaj_player_token_${roomCode}`, playerSessionToken);
+
+    return {
+      roomData: {
+        ...roomData,
+        playerCount: existingPlayers.length + 1,
+        lastActivityAt: now,
+        updatedAt: now,
+      },
+      player: newPlayer,
+    };
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `rooms/${roomCode}/players/${user.uid}`);
     throw error;
   }
+}
+
+// 3. Close room explicitly (authoritative)
+export async function closeOnlineRoom(roomCode: string, reason: RoomClosedReason = 'host_left') {
+  try {
+    const roomRef = doc(db, 'rooms', roomCode);
+    await updateDoc(roomRef, {
+      status: 'CLOSED',
+      closedReason: reason,
+      updatedAt: Date.now(),
+    });
+  } catch (error) {
+    console.error('Error closing room:', error);
+  } finally {
+    sessionStorage.removeItem(`dhappabaj_host_token_${roomCode}`);
+    sessionStorage.removeItem('dhappabaj_active_room');
+  }
+}
+
+// 4. Leave room with automatic closure on host leave or empty room
+export async function leaveOnlineRoom(roomCode: string) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const roomRef = doc(db, 'rooms', roomCode);
+  const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
+
+  try {
+    const roomSnap = await getDoc(roomRef);
+    if (!roomSnap.exists()) {
+      sessionStorage.removeItem('dhappabaj_active_room');
+      return;
+    }
+
+    const roomData = roomSnap.data() as OnlineRoomData;
+    const isHost = roomData.hostId === user.uid;
+
+    if (isHost) {
+      // RULE: When host intentionally exits the lobby or active game -> room status changes to CLOSED immediately!
+      await updateDoc(roomRef, {
+        status: 'CLOSED',
+        closedReason: 'host_left',
+        updatedAt: Date.now(),
+      });
+      try {
+        await deleteDoc(playerRef);
+      } catch {
+        // Best effort
+      }
+    } else {
+      // Ordinary player leaving
+      await deleteDoc(playerRef);
+
+      const playersSnap = await getDocs(collection(db, 'rooms', roomCode, 'players'));
+      const remainingPlayers = playersSnap.docs.map((d) => d.data() as OnlinePlayer);
+
+      if (remainingPlayers.length === 0) {
+        // RULE: If all players leave a room -> room status changes to CLOSED immediately!
+        await updateDoc(roomRef, {
+          status: 'CLOSED',
+          closedReason: 'empty_room',
+          playerCount: 0,
+          updatedAt: Date.now(),
+        });
+      } else {
+        await updateDoc(roomRef, {
+          playerCount: remainingPlayers.length,
+          lastActivityAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error leaving room:', error);
+  } finally {
+    sessionStorage.removeItem(`dhappabaj_host_token_${roomCode}`);
+    sessionStorage.removeItem('dhappabaj_active_room');
+  }
+}
+
+// 5. Host disconnect notification & 30s grace window
+export async function setHostDisconnected(roomCode: string, isDisconnected: boolean) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  try {
+    const roomRef = doc(db, 'rooms', roomCode);
+    const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
+
+    const now = Date.now();
+    if (isDisconnected) {
+      await updateDoc(roomRef, {
+        hostDisconnectedAt: now,
+        updatedAt: now,
+      });
+      await updateDoc(playerRef, {
+        connectionStatus: 'offline',
+        lastSeenAt: now,
+      });
+    } else {
+      await updateDoc(roomRef, {
+        hostDisconnectedAt: null,
+        lastActivityAt: now,
+        updatedAt: now,
+      });
+      await updateDoc(playerRef, {
+        connectionStatus: 'online',
+        lastSeenAt: now,
+      });
+    }
+  } catch (err) {
+    console.error('Error updating host connection status:', err);
+  }
+}
+
+// 6. Ordinary player heartbeat & connection updates
+export async function sendPlayerHeartbeat(
+  roomCode: string,
+  isHost: boolean,
+  name?: string,
+  avatar?: string
+) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const now = Date.now();
+  const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
+  const roomRef = doc(db, 'rooms', roomCode);
+
+  const updates: Record<string, any> = {
+    connectionStatus: 'online',
+    lastSeenAt: now,
+  };
+  if (name) updates.name = name.trim().slice(0, 24);
+  if (avatar) updates.avatar = avatar;
+
+  try {
+    await updateDoc(playerRef, updates);
+    // Touch room activity
+    const roomUpdates: Record<string, any> = {
+      lastActivityAt: now,
+    };
+    if (isHost) {
+      roomUpdates.hostDisconnectedAt = null;
+    }
+    await updateDoc(roomRef, roomUpdates);
+  } catch (error) {
+    // Non-critical background heartbeat
+  }
+}
+
+// 7. Check if room is expired or host disconnected past 30s grace period
+export async function checkAndExpireRoomIfNeeded(
+  roomCode: string,
+  roomData: OnlineRoomData
+): Promise<boolean> {
+  const now = Date.now();
+  const isAlreadyClosed =
+    roomData.status === 'CLOSED' ||
+    roomData.status === 'EXPIRED' ||
+    (roomData.status as string) === 'closed' ||
+    (roomData.status as string) === 'expired';
+
+  if (isAlreadyClosed) return true;
+
+  const roomRef = doc(db, 'rooms', roomCode);
+
+  // Check 1: Host disconnected for > 30 seconds
+  if (roomData.hostDisconnectedAt && now - roomData.hostDisconnectedAt > HOST_DISCONNECT_GRACE_MS) {
+    try {
+      await updateDoc(roomRef, {
+        status: 'CLOSED',
+        closedReason: 'host_disconnected',
+        updatedAt: now,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Check 2: 5 minutes inactivity
+  const lastActive = roomData.lastActivityAt || roomData.updatedAt || roomData.createdAt || 0;
+  if (now - lastActive > INACTIVITY_TIMEOUT_MS) {
+    try {
+      await updateDoc(roomRef, {
+        status: 'EXPIRED',
+        closedReason: 'inactivity_timeout',
+        updatedAt: now,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
 }
 
 // Update player display name or avatar
@@ -231,9 +557,12 @@ export async function updateOnlinePlayerProfile(
   if (!user) return;
 
   const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
+  const roomRef = doc(db, 'rooms', roomCode);
+  const now = Date.now();
+
   const updates: Record<string, any> = {
     name: name.trim().slice(0, 24),
-    lastSeenAt: Date.now(),
+    lastSeenAt: now,
   };
   if (avatar) {
     updates.avatar = avatar;
@@ -241,6 +570,7 @@ export async function updateOnlinePlayerProfile(
 
   try {
     await updateDoc(playerRef, updates);
+    await updateDoc(roomRef, { lastActivityAt: now });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `rooms/${roomCode}/players/${user.uid}`);
   }
@@ -252,11 +582,15 @@ export async function togglePlayerReady(roomCode: string, isReady: boolean) {
   if (!user) return;
 
   const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
+  const roomRef = doc(db, 'rooms', roomCode);
+  const now = Date.now();
+
   try {
     await updateDoc(playerRef, {
       isReady,
-      lastSeenAt: Date.now(),
+      lastSeenAt: now,
     });
+    await updateDoc(roomRef, { lastActivityAt: now });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `rooms/${roomCode}/players/${user.uid}`);
   }
@@ -268,11 +602,13 @@ export async function updateOnlineRoomSettings(
   settings: Partial<RoomSettings>
 ) {
   const roomRef = doc(db, 'rooms', roomCode);
+  const now = Date.now();
   try {
     await updateDoc(roomRef, {
       settings,
       totalRounds: settings.totalRounds ?? DEFAULT_ONLINE_SETTINGS.totalRounds,
-      updatedAt: Date.now(),
+      lastActivityAt: now,
+      updatedAt: now,
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `rooms/${roomCode}`);
@@ -288,53 +624,11 @@ export async function kickOnlinePlayer(roomCode: string, targetPlayerId: string)
     const playersSnap = await getDocs(collection(db, 'rooms', roomCode, 'players'));
     await updateDoc(roomRef, {
       playerCount: playersSnap.size,
+      lastActivityAt: Date.now(),
       updatedAt: Date.now(),
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `rooms/${roomCode}/players/${targetPlayerId}`);
-  }
-}
-
-// Leave room
-export async function leaveOnlineRoom(roomCode: string) {
-  const user = auth.currentUser;
-  if (!user) return;
-
-  const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
-  const roomRef = doc(db, 'rooms', roomCode);
-
-  try {
-    await deleteDoc(playerRef);
-    const playersSnap = await getDocs(collection(db, 'rooms', roomCode, 'players'));
-    const remainingPlayers = playersSnap.docs.map((d) => d.data() as OnlinePlayer);
-
-    if (remainingPlayers.length === 0) {
-      // Delete room if empty
-      await deleteDoc(roomRef);
-    } else {
-      // If leaving player was host, transfer host to next player
-      const roomSnap = await getDoc(roomRef);
-      if (roomSnap.exists()) {
-        const roomData = roomSnap.data() as OnlineRoomData;
-        if (roomData.hostId === user.uid) {
-          const nextHost = remainingPlayers[0];
-          await updateDoc(roomRef, {
-            hostId: nextHost.id,
-            playerCount: remainingPlayers.length,
-            updatedAt: Date.now(),
-          });
-          const nextHostRef = doc(db, 'rooms', roomCode, 'players', nextHost.id);
-          await updateDoc(nextHostRef, { isHost: true });
-        } else {
-          await updateDoc(roomRef, {
-            playerCount: remainingPlayers.length,
-            updatedAt: Date.now(),
-          });
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error leaving room:', error);
   }
 }
 
@@ -348,8 +642,8 @@ export async function startOnlineRound(roomCode: string, roundNumber: number = 1
   const playersSnap = await getDocs(collection(db, 'rooms', roomCode, 'players'));
   const players = playersSnap.docs.map((d) => d.data() as OnlinePlayer);
 
-  if (players.length < 4) {
-    throw new Error('খেলা শুরু করতে কমপক্ষে ৪ জন খেলোয়াড় প্রয়োজন (Minimum 4 players required to start)');
+  if (players.length < 3) {
+    throw new Error('খেলা শুরু করতে কমপক্ষে ৩ জন খেলোয়াড় প্রয়োজন (Minimum 3 players required to start)');
   }
 
   // Pick random word
@@ -402,6 +696,7 @@ export async function startOnlineRound(roomCode: string, roundNumber: number = 1
     batch.update(playerRef, {
       hasVoted: false,
       clue: '',
+      hasSeenCard: false,
     });
   });
 
@@ -411,9 +706,17 @@ export async function startOnlineRound(roomCode: string, roundNumber: number = 1
     batch.delete(vDoc.ref);
   });
 
+  // Delete previous messages if any
+  const msgsSnap = await getDocs(collection(db, 'rooms', roomCode, 'messages'));
+  msgsSnap.docs.forEach((mDoc) => {
+    batch.delete(mDoc.ref);
+  });
+
+  const now = Date.now();
+
   // Update room status and state
   batch.update(roomRef, {
-    status: 'in_progress',
+    status: 'PLAYING',
     currentPhase: 'ROLE_REVEAL',
     currentRound: roundNumber,
     currentWordCategory: word.category,
@@ -423,12 +726,12 @@ export async function startOnlineRound(roomCode: string, roundNumber: number = 1
     eliminatedPlayerId: null,
     imposterGuessedWord: false,
     imposterGuessAnswer: null,
-    // Store secretly on backend until reveal phase
     revealedWord: sanitizeForFirestore(word),
     revealedImposterIds: assignedImposterIds,
     revealedVotes: {},
     scoreDetails: [],
-    updatedAt: Date.now(),
+    lastActivityAt: now,
+    updatedAt: now,
   });
 
   await batch.commit();
@@ -441,13 +744,15 @@ export async function setOnlineRoomPhase(
   durationSeconds: number = 0
 ) {
   const roomRef = doc(db, 'rooms', roomCode);
-  const phaseEndsAt = durationSeconds > 0 ? Date.now() + durationSeconds * 1000 : null;
+  const now = Date.now();
+  const phaseEndsAt = durationSeconds > 0 ? now + durationSeconds * 1000 : null;
 
   try {
     await updateDoc(roomRef, {
       currentPhase: phase,
       phaseEndsAt,
-      updatedAt: Date.now(),
+      lastActivityAt: now,
+      updatedAt: now,
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `rooms/${roomCode}`);
@@ -460,11 +765,15 @@ export async function submitOnlineClue(roomCode: string, clueText: string) {
   if (!user) return;
 
   const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
+  const roomRef = doc(db, 'rooms', roomCode);
+  const now = Date.now();
+
   try {
     await updateDoc(playerRef, {
       clue: clueText.trim().slice(0, 80),
-      lastSeenAt: Date.now(),
+      lastSeenAt: now,
     });
+    await updateDoc(roomRef, { lastActivityAt: now });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `rooms/${roomCode}/players/${user.uid}`);
   }
@@ -481,17 +790,20 @@ export async function castOnlineVote(roomCode: string, suspectId: string) {
 
   const voteRef = doc(db, 'rooms', roomCode, 'votes', user.uid);
   const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
+  const roomRef = doc(db, 'rooms', roomCode);
+  const now = Date.now();
 
   const voteData: OnlineVote = {
     voterId: user.uid,
     suspectId,
-    timestamp: Date.now(),
+    timestamp: now,
   };
 
   try {
     const batch = writeBatch(db);
     batch.set(voteRef, voteData);
-    batch.update(playerRef, { hasVoted: true, lastSeenAt: Date.now() });
+    batch.update(playerRef, { hasVoted: true, lastSeenAt: now });
+    batch.update(roomRef, { lastActivityAt: now });
     await batch.commit();
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `rooms/${roomCode}/votes/${user.uid}`);
@@ -583,15 +895,17 @@ export async function resolveOnlineVotingResults(roomCode: string) {
 
   const nextPhase: OnlineGamePhase = shouldGuess ? 'IMPOSTER_GUESS' : 'RESULT';
   const initialWinner = caughtImposter ? 'innocents' : 'imposter';
+  const now = Date.now();
 
   batch.update(roomRef, {
     currentPhase: nextPhase,
-    phaseEndsAt: shouldGuess ? Date.now() + 45000 : null,
+    phaseEndsAt: shouldGuess ? now + 45000 : null,
     eliminatedPlayerId: eliminatedId,
     revealedVotes: votesMap,
-    scoreDetails,
+    scoreDetails: sanitizeForFirestore(scoreDetails),
     winner: shouldGuess ? null : initialWinner,
-    updatedAt: Date.now(),
+    lastActivityAt: now,
+    updatedAt: now,
   });
 
   await batch.commit();
@@ -615,6 +929,7 @@ export async function submitOnlineImposterGuess(
   const wordEnClean = secretWord.wordEn.trim().toLowerCase();
 
   const isCorrect = cleanGuess === wordBnClean || cleanGuess === wordEnClean;
+  const now = Date.now();
 
   // If correct, Imposter steals the win! Update scores
   const batch = writeBatch(db);
@@ -622,7 +937,6 @@ export async function submitOnlineImposterGuess(
     const imposterIds = roomData.revealedImposterIds || [];
     imposterIds.forEach((impId) => {
       const pRef = doc(db, 'rooms', roomCode, 'players', impId);
-      // Give imposter extra +3 points
       const existingDetail = roomData.scoreDetails?.find((d) => d.playerId === impId);
       if (existingDetail) {
         batch.update(pRef, {
@@ -638,7 +952,8 @@ export async function submitOnlineImposterGuess(
     imposterGuessAnswer: guess.trim(),
     winner: isCorrect ? 'imposter' : 'innocents',
     phaseEndsAt: null,
-    updatedAt: Date.now(),
+    lastActivityAt: now,
+    updatedAt: now,
   });
 
   await batch.commit();
@@ -685,7 +1000,6 @@ export function subscribeToOnlinePlayers(
     playersColl,
     (snap) => {
       const list = snap.docs.map((d) => d.data() as OnlinePlayer);
-      // Sort by joinedAt so order remains consistent
       list.sort((a, b) => a.joinedAt - b.joinedAt);
       onUpdate(list);
     },
@@ -733,6 +1047,79 @@ export function subscribeToOnlineVotes(
     },
     (error) => {
       handleFirestoreError(error, OperationType.LIST, `rooms/${roomCode}/votes`);
+      if (onError) onError(error);
+    }
+  );
+}
+
+// Player confirms they saw their secret role & word
+export async function confirmOnlineCardSeen(roomCode: string) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
+  const roomRef = doc(db, 'rooms', roomCode);
+  const now = Date.now();
+
+  try {
+    await updateDoc(playerRef, {
+      hasSeenCard: true,
+      lastSeenAt: now,
+    });
+    await updateDoc(roomRef, { lastActivityAt: now });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `rooms/${roomCode}/players/${user.uid}`);
+  }
+}
+
+// Send discussion chat message
+export async function sendOnlineChatMessage(
+  roomCode: string,
+  player: OnlinePlayer,
+  text: string
+) {
+  const user = auth.currentUser;
+  if (!user || !text.trim()) return;
+
+  const msgId = `m-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const msgRef = doc(db, 'rooms', roomCode, 'messages', msgId);
+  const roomRef = doc(db, 'rooms', roomCode);
+  const now = Date.now();
+
+  const messageData: ChatMessage = {
+    id: msgId,
+    senderId: user.uid,
+    senderName: player.name,
+    senderAvatar: player.avatar,
+    senderColor: player.avatarColor,
+    text: text.trim().slice(0, 140),
+    timestamp: now,
+  };
+
+  try {
+    await setDoc(msgRef, sanitizeForFirestore(messageData));
+    await updateDoc(roomRef, { lastActivityAt: now });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `rooms/${roomCode}/messages/${msgId}`);
+  }
+}
+
+// Subscribe to live chat messages
+export function subscribeToChatMessages(
+  roomCode: string,
+  onUpdate: (messages: ChatMessage[]) => void,
+  onError?: (err: unknown) => void
+) {
+  const msgsColl = collection(db, 'rooms', roomCode, 'messages');
+  return onSnapshot(
+    msgsColl,
+    (snap) => {
+      const list = snap.docs.map((d) => d.data() as ChatMessage);
+      list.sort((a, b) => a.timestamp - b.timestamp);
+      onUpdate(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, `rooms/${roomCode}/messages`);
       if (onError) onError(error);
     }
   );

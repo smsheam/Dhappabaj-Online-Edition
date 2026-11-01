@@ -2,12 +2,20 @@
   "entities": {
     "Room": {
       "title": "Room",
-      "description": "Multiplayer game room state and settings",
+      "description": "Multiplayer game room state, host session, status, and settings",
       "type": "object",
       "properties": {
         "roomCode": { "type": "string", "maxLength": 6 },
         "hostId": { "type": "string", "maxLength": 128 },
-        "status": { "type": "string", "enum": ["waiting", "in_progress", "ended"] },
+        "hostSessionToken": { "type": "string", "maxLength": 128 },
+        "status": {
+          "type": "string",
+          "enum": ["WAITING", "PLAYING", "CLOSED", "EXPIRED", "waiting", "in_progress", "ended"]
+        },
+        "closedReason": {
+          "type": "string",
+          "enum": ["host_left", "host_disconnected", "empty_room", "inactivity_timeout", "game_completed"]
+        },
         "currentPhase": {
           "type": "string",
           "enum": [
@@ -22,14 +30,17 @@
             "GAME_OVER"
           ]
         },
-        "round": { "type": "number" },
+        "currentRound": { "type": "number" },
         "totalRounds": { "type": "number" },
         "playerCount": { "type": "number" },
         "phaseEndsAt": { "type": "number" },
         "currentWordCategory": { "type": "string", "maxLength": 64 },
-        "imposterGuessResult": { "type": "string", "maxLength": 64 }
+        "lastActivityAt": { "type": "number" },
+        "hostDisconnectedAt": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
       },
-      "required": ["roomCode", "hostId", "status", "currentPhase", "round", "totalRounds"]
+      "required": ["roomCode", "hostId", "status", "currentPhase", "currentRound", "totalRounds", "lastActivityAt"]
     },
     "Player": {
       "title": "Player",
@@ -37,19 +48,23 @@
       "type": "object",
       "properties": {
         "playerId": { "type": "string", "maxLength": 128 },
-        "displayName": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "sessionToken": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 32 },
         "avatar": { "type": "string", "maxLength": 16 },
-        "color": { "type": "string", "maxLength": 32 },
+        "avatarColor": { "type": "string", "maxLength": 32 },
         "titleBn": { "type": "string", "maxLength": 64 },
         "titleEn": { "type": "string", "maxLength": 64 },
         "isReady": { "type": "boolean" },
         "isHost": { "type": "boolean" },
         "score": { "type": "number" },
         "hasVoted": { "type": "boolean" },
+        "hasSeenCard": { "type": "boolean" },
         "clue": { "type": "string", "maxLength": 120 },
-        "connectionStatus": { "type": "string", "enum": ["online", "offline"] }
+        "connectionStatus": { "type": "string", "enum": ["online", "offline"] },
+        "joinedAt": { "type": "number" },
+        "lastSeenAt": { "type": "number" }
       },
-      "required": ["playerId", "displayName", "avatar", "color", "isReady", "isHost", "score"]
+      "required": ["name", "avatar", "avatarColor", "isReady", "isHost", "score", "connectionStatus"]
     },
     "PrivateRole": {
       "title": "PrivateRole",
@@ -62,6 +77,8 @@
         "wordEn": { "type": "string", "maxLength": 64 },
         "hintBn": { "type": "string", "maxLength": 128 },
         "hintEn": { "type": "string", "maxLength": 128 },
+        "shortHintBn": { "type": "string", "maxLength": 128 },
+        "shortHintEn": { "type": "string", "maxLength": 128 },
         "category": { "type": "string", "maxLength": 64 }
       },
       "required": ["playerId", "role"]
@@ -72,19 +89,35 @@
       "type": "object",
       "properties": {
         "voterId": { "type": "string", "maxLength": 128 },
-        "suspectId": { "type": "string", "maxLength": 128 }
+        "suspectId": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "number" }
       },
       "required": ["voterId", "suspectId"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Live chat message during discussion phase",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 64 },
+        "senderAvatar": { "type": "string", "maxLength": 16 },
+        "senderColor": { "type": "string", "maxLength": 32 },
+        "text": { "type": "string", "maxLength": 160 },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["id", "senderId", "senderName", "text", "timestamp"]
     }
   },
   "firestore": {
     "/rooms/{roomId}": {
       "schema": "Room",
-      "description": "Rooms collection holding public game state and host settings"
+      "description": "Rooms collection holding public game state, lifecycle, and host settings"
     },
     "/rooms/{roomId}/players/{playerId}": {
       "schema": "Player",
-      "description": "Players participating in the room"
+      "description": "Players participating in the room with connection heartbeat"
     },
     "/rooms/{roomId}/private/{playerId}": {
       "schema": "PrivateRole",
@@ -93,6 +126,10 @@
     "/rooms/{roomId}/votes/{playerId}": {
       "schema": "Vote",
       "description": "Individual player votes cast during voting phase"
+    },
+    "/rooms/{roomId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Live discussion messages"
     }
   }
 }
