@@ -1,4 +1,4 @@
-import { auth, db, ensureAuthenticatedUser, ensureFirestoreConnected } from '../firebase';
+import { auth, db, ensureAuthenticatedUser, ensureFirestoreConnected, firebaseConfig } from '../firebase';
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import defaultAppletConfig from '../../firebase-applet-config.json';
 
@@ -50,9 +50,9 @@ export function getProductionDiagnostics(): DiagnosticInfo {
     timestamp: new Date().toISOString(),
     origin: typeof window !== 'undefined' ? window.location.origin : 'server',
     isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
-    firebaseProjectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || defaultAppletConfig.projectId,
-    firestoreDatabaseId: import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || defaultAppletConfig.firestoreDatabaseId,
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || defaultAppletConfig.authDomain,
+    firebaseProjectId: firebaseConfig.projectId,
+    firestoreDatabaseId: firebaseConfig.firestoreDatabaseId,
+    authDomain: firebaseConfig.authDomain,
     authUserId: user?.uid || null,
     isAnonymous: user?.isAnonymous ?? null,
     authProvider: user?.providerData?.[0]?.providerId || (user?.isAnonymous ? 'anonymous' : null),

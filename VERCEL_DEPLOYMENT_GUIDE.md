@@ -1,66 +1,64 @@
 # Vercel Production Deployment Guide - Dhappabaj (ধাপ্পাবাজ)
 
-This guide explains how to deploy **Dhappabaj** to Vercel and ensure real-time global multiplayer works seamlessly.
+This guide explains how to deploy **Dhappabaj** to Vercel with **zero environment variable hassle**.
 
 ---
 
-## 1. Architecture Overview
-- **Frontend**: Vite + React 19 SPA (Client-Side Rendering)
-- **Backend & Persistence**: Firebase Cloud Firestore (Database ID: `ai-studio-dhappabajonlinee-ceeaf2df-4aeb-4a70-8e6b-1923970426eb`)
-- **Authentication**: Firebase Authentication (Anonymous Guest + Optional Google Sign-In)
-- **Realtime**: Firestore `onSnapshot` real-time listeners over HTTPS long polling (`experimentalForceLongPolling: true`).
-- **No external server required**: Vercel serves the static bundle, and clients connect directly to Cloud Firestore.
+## ⚡ Quick Summary: NO Environment Variables Needed in Vercel!
+
+You **DO NOT need to enter any environment variables in Vercel**. 
+Leave the Vercel "Environment Variables" section completely **empty**.
+
+### Why did Vercel show the warning?
+> *"Remove the public framework prefix to keep this value private. Public prefixes expose values to the browser. If that's safe, change the variable to Config."*
+
+Vercel's dashboard has an automated security scanner. Whenever you enter a variable name that begins with a public frontend prefix (like `VITE_`) and also contains words like `_API_KEY`, Vercel warns you that this value will be exposed to the user's browser, and prompts you to change the type from "Secret" to "Config" (Plain text). If you do not change it to Config, Vercel automatically discards/removes it.
+
+**You can completely ignore adding variables in Vercel:**
+In client-side Firebase web applications, the Firebase API key is **public by design** (used by Google to route requests to your Firebase project, while data security is enforced by Firestore Security Rules).
+All configuration (`apiKey`, `projectId`, `appId`, `firestoreDatabaseId`) is **already built directly into `src/firebase.ts` and `firebase-applet-config.json`** inside this repository.
+
+When Vercel builds the project (`npm run build`), Vite automatically bakes this configuration into the build. You do not need to configure anything in Vercel's Environment Variables tab!
 
 ---
 
-## 2. Vercel Environment Variables
-In your Vercel Project Dashboard (`Settings` -> `Environment Variables`), configure the following variables (for **Production**, **Preview**, and **Development**):
+## 1. Step-by-Step Vercel Deployment
 
-| Key | Value |
-|---|---|
-| `VITE_FIREBASE_PROJECT_ID` | `semiotic-dryad-kwpgt` |
-| `VITE_FIREBASE_APP_ID` | `1:730462018709:web:a12aee3e1050a653aacf9c` |
-| `VITE_FIREBASE_API_KEY` | `AIzaSyCL-DpBxGovTk1JzA4g_BPltIwyK_uMKx4` |
-| `VITE_FIREBASE_AUTH_DOMAIN` | `semiotic-dryad-kwpgt.firebaseapp.com` |
-| `VITE_FIREBASE_FIRESTORE_DATABASE_ID` | `ai-studio-dhappabajonlinee-ceeaf2df-4aeb-4a70-8e6b-1923970426eb` |
-| `VITE_FIREBASE_STORAGE_BUCKET` | `semiotic-dryad-kwpgt.firebasestorage.app` |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | `730462018709` |
-
-> *Note:* Even if environment variables are not set in Vercel, the app automatically falls back to `firebase-applet-config.json` bundled in the repo.
+1. **Push your code to GitHub / GitLab / Bitbucket**.
+2. Go to [Vercel](https://vercel.com) and click **Add New...** -> **Project**.
+3. Import your Dhappabaj repository.
+4. Keep the default settings:
+   - **Framework Preset**: `Vite`
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+5. **Leave Environment Variables completely empty.**
+6. Click **Deploy**.
 
 ---
 
-## 3. Firebase Console Configuration (Crucial for Vercel)
+## 2. The ONLY Thing Required: Add Vercel Domain to Firebase Console
 
-### Step A: Authorize your Vercel Domain (For Google Sign-In & Auth)
-1. Go to the [Firebase Console](https://console.firebase.google.com/project/semiotic-dryad-kwpgt/authentication/settings).
-2. Click **Authentication** -> **Settings** -> **Authorized domains**.
-3. Click **Add domain**.
-4. Enter your Vercel deployment domain:
-   - `your-app-name.vercel.app`
-   - Any custom domains (e.g. `dhappabaj.com`).
+To allow your deployed Vercel site to authenticate and open rooms:
+
+1. Copy your Vercel deployment URL (e.g. `dhappabaj.vercel.app` or `your-app-name.vercel.app`).
+2. Go to the [Firebase Console Authorized Domains](https://console.firebase.google.com/project/semiotic-dryad-kwpgt/authentication/settings).
+3. Under **Authorized domains**, click **Add domain**.
+4. Paste your domain (e.g. `dhappabaj.vercel.app`). Do not include `https://`.
 5. Click **Save**.
 
-### Step B: Verify Anonymous Sign-in is Enabled
-1. In Firebase Console, go to **Authentication** -> **Sign-in method**.
-2. Ensure **Anonymous** is set to **Enabled**.
-3. Ensure **Google** is set to **Enabled** (if you want players to sign in with Google).
+### Also verify Anonymous Login is enabled:
+- In Firebase Console, go to **Authentication** -> **Sign-in method**.
+- Verify that **Anonymous** is set to **Enabled**.
 
 ---
 
-## 4. Vercel Project Settings
-When importing the Git repository into Vercel:
-- **Framework Preset**: `Vite`
-- **Build Command**: `npm run build`
-- **Output Directory**: `dist`
-- **Install Command**: `npm install`
-- The included `vercel.json` automatically handles client-side SPA routing (`rewrites` to `/index.html`).
+## 3. Verifying Your Vercel Deployment
 
----
-
-## 5. Built-in Production Diagnostics
-On the deployed site:
-1. Click **অনলাইন রুম (Online Room)**.
-2. At the bottom of the modal, tap **নেটওয়ার্ক পরীক্ষা (Diagnostics)**.
-3. Tap **Re-test Production Ping**.
-4. It tests live Auth and Firestore latency in real-time and reports whether everything is connected.
+Once deployed on Vercel:
+1. Open your Vercel URL on your mobile phone or browser.
+2. Click **অনলাইন রুম (Online Room)**.
+3. At the bottom of the modal, tap **নেটওয়ার্ক পরীক্ষা (Diagnostics)**.
+4. Tap **Re-test Production Ping**.
+5. It will run a live ping against Firebase and show:
+   `✓ All systems active. Total latency: ~300ms`
+6. Click **রুম তৈরি ও হোস্ট করুন (Create Room & Host)**. Your room will open instantly in ~1 second!

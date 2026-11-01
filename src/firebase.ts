@@ -15,14 +15,17 @@ import {
 } from 'firebase/firestore';
 import defaultAppletConfig from '../firebase-applet-config.json';
 
-const firebaseConfig = {
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || defaultAppletConfig.projectId,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || defaultAppletConfig.appId,
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || defaultAppletConfig.apiKey,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || defaultAppletConfig.authDomain,
-  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || defaultAppletConfig.firestoreDatabaseId,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || defaultAppletConfig.storageBucket,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || defaultAppletConfig.messagingSenderId,
+export const firebaseConfig = {
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || defaultAppletConfig?.projectId || 'semiotic-dryad-kwpgt',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || defaultAppletConfig?.appId || '1:730462018709:web:a12aee3e1050a653aacf9c',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || defaultAppletConfig?.apiKey || 'AIzaSyCL-DpBxGovTk1JzA4g_BPltIwyK_uMKx4',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || defaultAppletConfig?.authDomain || 'semiotic-dryad-kwpgt.firebaseapp.com',
+  firestoreDatabaseId:
+    import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID ||
+    defaultAppletConfig?.firestoreDatabaseId ||
+    'ai-studio-dhappabajonlinee-ceeaf2df-4aeb-4a70-8e6b-1923970426eb',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || defaultAppletConfig?.storageBucket || 'semiotic-dryad-kwpgt.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || defaultAppletConfig?.messagingSenderId || '730462018709',
 };
 
 // Initialize Firebase App
