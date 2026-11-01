@@ -48,6 +48,14 @@ export function generateRandomCode(): string {
   return code;
 }
 
+// Recursively strips or converts undefined fields so Firestore never throws 'Unsupported field value: undefined'
+export function sanitizeForFirestore<T>(obj: T): T {
+  if (obj === null || obj === undefined) return null as unknown as T;
+  return JSON.parse(
+    JSON.stringify(obj, (_key, value) => (value === undefined ? null : value))
+  );
+}
+
 export const DEFAULT_ONLINE_SETTINGS: RoomSettings = {
   maxPlayers: 8,
   imposterCount: 1,
@@ -366,25 +374,27 @@ export async function startOnlineRound(roomCode: string, roundNumber: number = 1
       const imposterData: PrivatePlayerRole = {
         playerId: p.id,
         role: 'imposter',
-        hintBn: word.hintBn,
-        hintEn: word.hintEn,
-        shortHintBn: word.shortHintBn,
-        shortHintEn: word.shortHintEn,
+        hintBn: word.hintBn || '',
+        hintEn: word.hintEn || '',
+        shortHintBn: word.shortHintBn || word.hintBn || '',
+        shortHintEn: word.shortHintEn || word.hintEn || '',
         category: word.category,
       };
-      batch.set(privateRef, imposterData);
+      batch.set(privateRef, sanitizeForFirestore(imposterData));
     } else {
       // Innocents receive the secret word
       const innocentData: PrivatePlayerRole = {
         playerId: p.id,
         role: 'innocent',
-        wordBn: word.wordBn,
-        wordEn: word.wordEn,
-        hintBn: word.hintBn,
-        hintEn: word.hintEn,
+        wordBn: word.wordBn || '',
+        wordEn: word.wordEn || '',
+        hintBn: word.hintBn || '',
+        hintEn: word.hintEn || '',
+        shortHintBn: word.shortHintBn || word.hintBn || '',
+        shortHintEn: word.shortHintEn || word.hintEn || '',
         category: word.category,
       };
-      batch.set(privateRef, innocentData);
+      batch.set(privateRef, sanitizeForFirestore(innocentData));
     }
 
     // Reset player round flags
@@ -414,7 +424,7 @@ export async function startOnlineRound(roomCode: string, roundNumber: number = 1
     imposterGuessedWord: false,
     imposterGuessAnswer: null,
     // Store secretly on backend until reveal phase
-    revealedWord: word,
+    revealedWord: sanitizeForFirestore(word),
     revealedImposterIds: assignedImposterIds,
     revealedVotes: {},
     scoreDetails: [],
