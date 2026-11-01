@@ -16,6 +16,7 @@ import {
   enableNetwork,
 } from 'firebase/firestore';
 import { db, auth, ensureAuthenticatedUser, handleFirestoreError, OperationType } from '../firebase';
+import { logProductionEvent } from '../utils/productionDiagnostics';
 
 // Timeout helper to prevent infinite hanging on mobile or unstable networks
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number = 7000): Promise<T> {
@@ -160,7 +161,12 @@ export async function createOnlineRoom(
   playerName: string,
   playerAvatar: string = '🕵️'
 ): Promise<{ roomCode: string; player: OnlinePlayer; roomData: OnlineRoomData }> {
+  logProductionEvent('CreateRoom: Initiated by user', { playerName, playerAvatar });
   const user = await ensureAuthenticatedUser();
+  logProductionEvent('CreateRoom: Authenticated host status verified', {
+    uid: user.uid,
+    isAnonymous: user.isAnonymous,
+  });
 
   // Fire-and-forget cleanup of any previously active room created by this host in current browser session
   const previousRoomCode = sessionStorage.getItem('dhappabaj_active_room');
@@ -177,6 +183,8 @@ export async function createOnlineRoom(
 
   // Generate unique 6-char alphanumeric room code (1,073,741,824 possible combinations)
   const roomCode = generateRandomCode();
+  logProductionEvent('CreateRoom: Room ID generated', { roomCode });
+
   const roomRef = doc(db, 'rooms', roomCode);
   const hostSessionToken = generateSessionToken('hst');
   const now = Date.now();
@@ -227,13 +235,21 @@ export async function createOnlineRoom(
     batch.set(playerRef, sanitizeForFirestore(initialPlayer));
     await withTimeout(batch.commit(), 8000);
 
+    logProductionEvent('CreateRoom: Database commit successful', { roomCode, hostId: user.uid });
+
     // Store session tokens locally
     sessionStorage.setItem(`dhappabaj_host_token_${roomCode}`, hostSessionToken);
     sessionStorage.setItem('dhappabaj_active_room', roomCode);
     sessionStorage.setItem('dhappabaj_player_id', user.uid);
 
+    logProductionEvent('CreateRoom: Final response ready', { roomCode });
     return { roomCode, player: initialPlayer, roomData: initialRoom };
   } catch (error: any) {
+    logProductionEvent('CreateRoom: Batch write failed, checking for retry', {
+      roomCode,
+      error: error?.message || error,
+    });
+
     const isOffline =
       error?.message?.includes('offline') ||
       error?.code === 'unavailable' ||
@@ -250,16 +266,19 @@ export async function createOnlineRoom(
         retryBatch.set(playerRef, sanitizeForFirestore(initialPlayer));
         await withTimeout(retryBatch.commit(), 8000);
 
+        logProductionEvent('CreateRoom: Retry commit succeeded', { roomCode });
         sessionStorage.setItem(`dhappabaj_host_token_${roomCode}`, hostSessionToken);
         sessionStorage.setItem('dhappabaj_active_room', roomCode);
         sessionStorage.setItem('dhappabaj_player_id', user.uid);
 
         return { roomCode, player: initialPlayer, roomData: initialRoom };
       } catch (retryErr) {
+        logProductionEvent('CreateRoom: Retry failed', { roomCode, error: retryErr });
         handleFirestoreError(retryErr, OperationType.CREATE, `rooms/${roomCode}`);
         throw retryErr;
       }
     }
+    logProductionEvent('CreateRoom: Unrecoverable error', { roomCode, error });
     handleFirestoreError(error, OperationType.CREATE, `rooms/${roomCode}`);
     throw error;
   }

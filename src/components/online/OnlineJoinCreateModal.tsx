@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Users, PlusCircle, LogIn, X, ExternalLink, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Users, PlusCircle, LogIn, X, ExternalLink, ShieldCheck, AlertCircle, Wifi, RefreshCw, Activity } from 'lucide-react';
 import { Language, Theme } from '../../types/game';
 import { PLAYER_AVATARS } from '../../data/avatars';
 import { createOnlineRoom, joinOnlineRoom, DEFAULT_ONLINE_SETTINGS } from '../../services/multiplayerService';
 import { sound } from '../../utils/audio';
 import { OnlinePlayer, OnlineRoomData } from '../../types/multiplayer';
 import { signInWithGoogle, auth, ensureAuthenticatedUser } from '../../firebase';
+import { testProductionConnectivity, getProductionDiagnostics, ConnectivityTestResult } from '../../utils/productionDiagnostics';
 
 interface OnlineJoinCreateModalProps {
   isOpen: boolean;
@@ -38,6 +39,30 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [needsGoogleSignIn, setNeedsGoogleSignIn] = useState<boolean>(false);
+  const [showDiagnostics, setShowDiagnostics] = useState<boolean>(false);
+  const [diagResult, setDiagResult] = useState<ConnectivityTestResult | null>(null);
+  const [testingDiag, setTestingDiag] = useState<boolean>(false);
+
+  const handleRunDiagnosticTest = async () => {
+    setTestingDiag(true);
+    sound.playClick();
+    try {
+      const res = await testProductionConnectivity();
+      setDiagResult(res);
+    } catch (e: any) {
+      setDiagResult({
+        success: false,
+        authLatencyMs: 0,
+        dbLatencyMs: 0,
+        totalTimeMs: 0,
+        userId: null,
+        error: e?.message || String(e),
+        guidance: 'Could not connect. Please check network.',
+      });
+    } finally {
+      setTestingDiag(false);
+    }
+  };
 
   // Eagerly ensure auth on mount
   useEffect(() => {
@@ -468,6 +493,64 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
                 : isEn ? 'Join Private Room' : 'রুমে প্রবেশ করুন'}
             </span>
           </button>
+
+          {/* Production Diagnostics & Network Status */}
+          <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60">
+            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Firestore Cloud: Ready</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDiagnostics(!showDiagnostics);
+                  if (!diagResult && !testingDiag) handleRunDiagnosticTest();
+                }}
+                className="text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <Activity className="w-3 h-3" />
+                <span>{showDiagnostics ? (isEn ? 'Hide Status' : 'স্ট্যাটাস বন্ধ') : (isEn ? 'Diagnostics' : 'নেটওয়ার্ক পরীক্ষা')}</span>
+              </button>
+            </div>
+
+            {showDiagnostics && (
+              <div className="mt-2.5 p-3 rounded-xl bg-slate-100 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 space-y-2 text-xs animate-in fade-in duration-150">
+                <div className="flex items-center justify-between font-mono text-[11px]">
+                  <span className="text-slate-600 dark:text-slate-400">Database ID:</span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[180px]">
+                    {getProductionDiagnostics().firestoreDatabaseId}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between font-mono text-[11px]">
+                  <span className="text-slate-600 dark:text-slate-400">Host Auth UID:</span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[180px]">
+                    {auth.currentUser?.uid ? `${auth.currentUser.uid.slice(0, 10)}...` : 'Connecting...'}
+                  </span>
+                </div>
+
+                {diagResult && (
+                  <div className={`p-2 rounded-lg text-[11px] ${diagResult.success ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'}`}>
+                    {diagResult.success ? (
+                      <p>✓ All systems active. Total latency: {diagResult.totalTimeMs}ms (Auth: {diagResult.authLatencyMs}ms, DB: {diagResult.dbLatencyMs}ms)</p>
+                    ) : (
+                      <p>✗ {diagResult.error} — {diagResult.guidance}</p>
+                    )}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  disabled={testingDiag}
+                  onClick={handleRunDiagnosticTest}
+                  className="w-full py-1.5 px-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-700 dark:text-amber-300 font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <RefreshCw className={`w-3 h-3 ${testingDiag ? 'animate-spin' : ''}`} />
+                  <span>{testingDiag ? (isEn ? 'Testing connection...' : 'পরীক্ষা চলছে...') : (isEn ? 'Re-test Production Ping' : 'সংযোগ পুনরায় পিং করুন')}</span>
+                </button>
+              </div>
+            )}
+          </div>
         </form>
       </div>
     </div>
