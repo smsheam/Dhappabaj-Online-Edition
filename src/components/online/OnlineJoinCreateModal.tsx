@@ -108,11 +108,11 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
             reject(
               new Error(
                 isEn
-                  ? 'Connection timeout. Please check your internet connection and retry.'
-                  : 'সংযোগের সময় শেষ হয়েছে। ইন্টারনেট সংযোগ পরীক্ষা করে পুনরায় চেষ্টা করুন।'
+                  ? 'Connection timeout. Please click Retry below.'
+                  : 'সংযোগের সময় শেষ হয়েছে। নিচে পুনরায় চেষ্টা বাটনে ট্যাপ করুন।'
               )
             ),
-          35000
+          12000
         )
       );
 
@@ -127,20 +127,21 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
       const isOffline =
         err?.message?.includes('offline') ||
         err?.code === 'unavailable' ||
-        err?.message?.includes('unavailable');
+        err?.message?.includes('unavailable') ||
+        err?.message?.includes('timed out');
 
       if (isRestricted) {
         setNeedsGoogleSignIn(true);
         setError(
           isEn
-            ? 'Anonymous guest login is not enabled in Firebase yet. Click below to continue with Google or enable Anonymous in Firebase Console.'
-            : 'প্রজেক্টে অ্যানোনিমাস লগইন সক্রিয় নেই। নিচে Google দিয়ে প্রবেশ করুন অথবা Firebase Console এ Anonymous চালু করুন।'
+            ? 'Anonymous guest login is not enabled in Firebase. Click below to continue with Google.'
+            : 'প্রজেক্টে অ্যানোনিমাস লগইন সক্রিয় নেই। নিচে Google দিয়ে প্রবেশ করুন।'
         );
       } else if (isOffline) {
         setError(
           isEn
-            ? 'Network connection issue. Please check your internet connection and retry.'
-            : 'নেটওয়ার্ক সংযোগে সমস্যা হচ্ছে। আপনার ইন্টারনেট সংযোগ পরীক্ষা করে পুনরায় চেষ্টা করুন।'
+            ? 'Network connection issue or timeout. Tap retry below.'
+            : 'নেটওয়ার্ক সংযোগে সমস্যা বা সময় শেষ হয়েছে। নিচে পুনরায় চেষ্টা বাটনে ট্যাপ করুন।'
         );
       } else {
         let cleanMsg = err?.message || '';
@@ -150,7 +151,7 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
             cleanMsg = parsed.error || cleanMsg;
           }
         } catch {}
-        setError(cleanMsg || (isEn ? 'Failed to create room' : 'রুম তৈরি করতে সমস্যা হয়েছে'));
+        setError(cleanMsg || (isEn ? 'Failed to create room. Please retry.' : 'রুম তৈরি করতে সমস্যা হয়েছে। পুনরায় চেষ্টা করুন।'));
       }
     } finally {
       setLoading(false);
@@ -180,11 +181,11 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
             reject(
               new Error(
                 isEn
-                  ? 'Connection timeout. Please check your internet connection and retry.'
-                  : 'সংযোগের সময় শেষ হয়েছে। ইন্টারনেট সংযোগ পরীক্ষা করে পুনরায় চেষ্টা করুন।'
+                  ? 'Connection timeout. Please click Retry below.'
+                  : 'সংযোগের সময় শেষ হয়েছে। নিচে পুনরায় চেষ্টা বাটনে ট্যাপ করুন।'
               )
             ),
-          35000
+          12000
         )
       );
 
@@ -199,20 +200,21 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
       const isOffline =
         err?.message?.includes('offline') ||
         err?.code === 'unavailable' ||
-        err?.message?.includes('unavailable');
+        err?.message?.includes('unavailable') ||
+        err?.message?.includes('timed out');
 
       if (isRestricted) {
         setNeedsGoogleSignIn(true);
         setError(
           isEn
-            ? 'Anonymous guest login is not enabled in Firebase yet. Click below to continue with Google or enable Anonymous in Firebase Console.'
-            : 'প্রজেক্টে অ্যানোনিমাস লগইন সক্রিয় নেই। নিচে Google দিয়ে প্রবেশ করুন অথবা Firebase Console এ Anonymous চালু করুন।'
+            ? 'Anonymous guest login is not enabled in Firebase. Click below to continue with Google.'
+            : 'প্রজেক্টে অ্যানোনিমাস লগইন সক্রিয় নেই। নিচে Google দিয়ে প্রবেশ করুন।'
         );
       } else if (isOffline) {
         setError(
           isEn
-            ? 'Network connection issue. Please check your internet connection and retry.'
-            : 'নেটওয়ার্ক সংযোগে সমস্যা হচ্ছে। আপনার ইন্টারনেট সংযোগ পরীক্ষা করে পুনরায় চেষ্টা করুন।'
+            ? 'Network connection issue or timeout. Tap retry below.'
+            : 'নেটওয়ার্ক সংযোগে সমস্যা বা সময় শেষ হয়েছে। নিচে পুনরায় চেষ্টা বাটনে ট্যাপ করুন।'
         );
       } else {
         let cleanMsg = err?.message || '';
@@ -375,7 +377,7 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
             </div>
           )}
 
-          {/* 1-Click Google Sign-In button if Anonymous Auth is disabled */}
+          {/* 1-Click Google Sign-In button if user prefers or if anonymous auth had issues */}
           {needsGoogleSignIn && (
             <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-3 animate-in zoom-in-95 duration-200">
               <div className="flex items-start gap-2">
@@ -385,8 +387,8 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
                     {isEn ? '1-Click Google Sign-In:' : '১-ক্লিকে গুগল সাইন-ইন:'}
                   </span>{' '}
                   {isEn
-                    ? 'Firebase Google sign-in is ready. Click below to connect instantly.'
-                    : 'গুগল সাইন-ইন প্রস্তুত রয়েছে। নিচের বাটনে ট্যাপ করে সাথে সাথে যুক্ত হন।'}
+                    ? 'You can sign in with your Google account to host or join instantly.'
+                    : 'গুগল অ্যাকাউন্ট দিয়ে নিমেষেই হোস্ট করতে পারেন।'}
                 </div>
               </div>
 
@@ -394,7 +396,7 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
                 type="button"
                 disabled={loading}
                 onClick={handleGoogleSignInAndProceed}
-                className="w-full py-3.5 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-amber-500 text-slate-900 dark:text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2.5 transition-all cursor-pointer"
+                className="w-full py-3 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-amber-500 text-slate-900 dark:text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2.5 transition-all cursor-pointer"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24">
                   <path
@@ -422,52 +424,50 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
                     : isEn ? 'Sign in with Google & Join' : 'Google দিয়ে সাইন-ইন ও যোগ দিন'}
                 </span>
               </button>
+            </div>
+          )}
 
-              <div className="pt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                <span>{isEn ? 'Want 100% login-free guest access? ' : 'লগইন ছাড়া গেস্ট মোড চান? '}</span>
-                <a
-                  href="https://console.firebase.google.com/project/semiotic-dryad-kwpgt/authentication/providers"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-amber-600 dark:text-amber-400 font-semibold underline inline-flex items-center gap-0.5"
+          {/* Error Message with instant Retry / Reset buttons */}
+          {error && (
+            <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-semibold space-y-2">
+              <p>{error}</p>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    sessionStorage.removeItem('dhappabaj_active_room');
+                    setError(null);
+                    setNeedsGoogleSignIn(false);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-700 dark:text-rose-200 text-xs font-bold transition-all cursor-pointer"
                 >
-                  <span>{isEn ? 'Enable Anonymous in Console' : 'Firebase Console এ Anonymous চালু করুন'}</span>
-                  <ExternalLink className="w-2.5 h-2.5" />
-                </a>
+                  {isEn ? 'Clear Cache & Retry' : 'ক্যাশ মুছে আবার চেষ্টা করুন'}
+                </button>
               </div>
             </div>
           )}
 
-          {/* Error Message if not needsGoogleSignIn */}
-          {error && !needsGoogleSignIn && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-semibold">
-              {error}
-            </div>
-          )}
-
-          {/* Standard submit button if not in needsGoogleSignIn mode */}
-          {!needsGoogleSignIn && (
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-base shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-            >
-              {loading ? (
-                <span className="inline-block animate-spin mr-2">⏳</span>
-              ) : activeTab === 'create' ? (
-                <PlusCircle className="w-5 h-5" />
-              ) : (
-                <LogIn className="w-5 h-5" />
-              )}
-              <span>
-                {loading
-                  ? isEn ? 'Connecting...' : 'সংযোগ হচ্ছে...'
-                  : activeTab === 'create'
-                  ? isEn ? 'Create Room & Host' : 'রুম তৈরি ও হোস্ট করুন'
-                  : isEn ? 'Join Private Room' : 'রুমে প্রবেশ করুন'}
-              </span>
-            </button>
-          )}
+          {/* Standard submit button for instant guest hosting/joining */}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-base shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+          >
+            {loading ? (
+              <span className="inline-block animate-spin mr-2">⏳</span>
+            ) : activeTab === 'create' ? (
+              <PlusCircle className="w-5 h-5" />
+            ) : (
+              <LogIn className="w-5 h-5" />
+            )}
+            <span>
+              {loading
+                ? isEn ? 'Connecting...' : 'রুম তৈরি হচ্ছে...'
+                : activeTab === 'create'
+                ? isEn ? 'Create Room & Host' : 'রুম তৈরি ও হোস্ট করুন'
+                : isEn ? 'Join Private Room' : 'রুমে প্রবেশ করুন'}
+            </span>
+          </button>
         </form>
       </div>
     </div>

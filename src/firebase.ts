@@ -28,13 +28,13 @@ const firebaseConfig = {
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore with specific database ID from config and auto-detect long polling
+// Initialize Firestore with specific database ID and robust long polling for instant iframe/mobile connectivity
 let firestoreInstance: Firestore;
 try {
   firestoreInstance = initializeFirestore(
     app,
     {
-      experimentalAutoDetectLongPolling: true,
+      experimentalForceLongPolling: true,
     },
     firebaseConfig.firestoreDatabaseId
   );
@@ -99,64 +99,52 @@ export async function signInWithGoogle(): Promise<User> {
   }
 }
 
+// Global singleton promise to prevent concurrent race conditions during auth initialization
+let authInitPromise: Promise<User> | null = null;
+
 // Ensure authenticated user (tries existing session, then anonymous auth, with safety timeout)
 export async function ensureAuthenticatedUser(): Promise<User> {
   if (auth.currentUser) {
     return auth.currentUser;
   }
 
-  return new Promise((resolve, reject) => {
-    let resolved = false;
-    const timeout = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        unsubscribe();
-        if (auth.currentUser) {
-          resolve(auth.currentUser);
-        } else {
-          reject(new Error('Authentication timeout. Please check your connection or sign in with Google.'));
-        }
-      }
-    }, 10000);
+  if (authInitPromise) {
+    return authInitPromise;
+  }
 
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      async (user) => {
-        if (resolved) return;
-        if (user) {
-          resolved = true;
-          clearTimeout(timeout);
-          unsubscribe();
-          resolve(user);
-        } else {
-          try {
-            const userCredential = await signInAnonymously(auth);
-            if (!resolved) {
-              resolved = true;
-              clearTimeout(timeout);
-              unsubscribe();
-              resolve(userCredential.user);
-            }
-          } catch (err: any) {
-            if (!resolved) {
-              resolved = true;
-              clearTimeout(timeout);
-              unsubscribe();
-              reject(err);
-            }
-          }
-        }
-      },
-      (err) => {
-        if (!resolved) {
-          resolved = true;
-          clearTimeout(timeout);
-          unsubscribe();
-          reject(err);
-        }
+  authInitPromise = (async () => {
+    try {
+      // 1. Wait briefly for stored credentials (IndexedDB / LocalStorage) to hydrate
+      try {
+        await Promise.race([
+          auth.authStateReady(),
+          new Promise((r) => setTimeout(r, 1500)),
+        ]);
+      } catch {
+        // Fallthrough to direct check
       }
-    );
-  });
+
+      if (auth.currentUser) {
+        return auth.currentUser;
+      }
+
+      // 2. Sign in anonymously with a 7s safety timeout
+      const signInPromise = signInAnonymously(auth).then((cred) => cred.user);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('Authentication timeout. Please check your internet connection or sign in with Google.')),
+          7000
+        )
+      );
+
+      const user = await Promise.race([signInPromise, timeoutPromise]);
+      return user;
+    } finally {
+      authInitPromise = null;
+    }
+  })();
+
+  return authInitPromise;
 }
 
 // Ensure network is active
@@ -171,3 +159,4 @@ export async function ensureFirestoreConnected(): Promise<void> {
 // Proactively initiate connection and authenticate without blocking
 ensureFirestoreConnected();
 ensureAuthenticatedUser().catch(() => {});
+

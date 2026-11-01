@@ -17,64 +17,75 @@ import {
 } from 'firebase/firestore';
 import { db, auth, ensureAuthenticatedUser, handleFirestoreError, OperationType } from '../firebase';
 
+// Timeout helper to prevent infinite hanging on mobile or unstable networks
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number = 7000): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('Firestore operation timed out')), timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+}
+
 // Helper to safely execute getDoc with automatic retry and network reconnection
 export async function safeGetDoc(docRef: DocumentReference): Promise<DocumentSnapshot> {
   let attempts = 0;
-  while (attempts < 3) {
+  while (attempts < 2) {
     try {
-      return await getDoc(docRef);
+      return await withTimeout(getDoc(docRef), 6000);
     } catch (err: any) {
       attempts++;
       const isOffline =
         err?.message?.includes('offline') ||
         err?.code === 'unavailable' ||
-        err?.message?.includes('unavailable');
+        err?.message?.includes('unavailable') ||
+        err?.message?.includes('timed out');
 
-      if (isOffline && attempts < 3) {
+      if (isOffline && attempts < 2) {
         try {
           await enableNetwork(db);
-          await new Promise((r) => setTimeout(r, 300 * attempts));
+          await new Promise((r) => setTimeout(r, 200));
           continue;
         } catch {
           // Continue to next attempt
         }
       }
-      if (attempts >= 3) {
+      if (attempts >= 2) {
         throw err;
       }
     }
   }
-  return await getDoc(docRef);
+  return await withTimeout(getDoc(docRef), 6000);
 }
 
 // Helper to safely execute getDocs with automatic retry and network reconnection
 export async function safeGetDocs(queryRef: Query | CollectionReference): Promise<QuerySnapshot> {
   let attempts = 0;
-  while (attempts < 3) {
+  while (attempts < 2) {
     try {
-      return await getDocs(queryRef);
+      return await withTimeout(getDocs(queryRef), 7000);
     } catch (err: any) {
       attempts++;
       const isOffline =
         err?.message?.includes('offline') ||
         err?.code === 'unavailable' ||
-        err?.message?.includes('unavailable');
+        err?.message?.includes('unavailable') ||
+        err?.message?.includes('timed out');
 
-      if (isOffline && attempts < 3) {
+      if (isOffline && attempts < 2) {
         try {
           await enableNetwork(db);
-          await new Promise((r) => setTimeout(r, 300 * attempts));
+          await new Promise((r) => setTimeout(r, 200));
           continue;
         } catch {
           // Continue to next attempt
         }
       }
-      if (attempts >= 3) {
+      if (attempts >= 2) {
         throw err;
       }
     }
   }
-  return await getDocs(queryRef);
+  return await withTimeout(getDocs(queryRef), 7000);
 }
 import {
   OnlineRoomData,
@@ -151,47 +162,21 @@ export async function createOnlineRoom(
 ): Promise<{ roomCode: string; player: OnlinePlayer; roomData: OnlineRoomData }> {
   const user = await ensureAuthenticatedUser();
 
-  // Best-effort cleanup of any previously active room created by this host in current browser session
+  // Fire-and-forget cleanup of any previously active room created by this host in current browser session
   const previousRoomCode = sessionStorage.getItem('dhappabaj_active_room');
   if (previousRoomCode) {
-    try {
-      const prevRef = doc(db, 'rooms', previousRoomCode);
-      const prevSnap = await safeGetDoc(prevRef);
-      if (prevSnap.exists()) {
-        const prevData = prevSnap.data() as OnlineRoomData;
-        if (prevData.hostId === user.uid && (prevData.status === 'WAITING' || (prevData.status as string) === 'waiting')) {
-          await updateDoc(prevRef, {
-            status: 'CLOSED',
-            closedReason: 'host_left',
-            updatedAt: Date.now(),
-          });
-        }
-      }
-    } catch {
-      // Ignore errors when cleaning previous room
-    }
+    // Non-blocking background cleanup: never await or stall creating a new room
+    updateDoc(doc(db, 'rooms', previousRoomCode), {
+      status: 'CLOSED',
+      closedReason: 'host_left',
+      updatedAt: Date.now(),
+    }).catch(() => {});
     sessionStorage.removeItem(`dhappabaj_host_token_${previousRoomCode}`);
     sessionStorage.removeItem('dhappabaj_active_room');
   }
 
-  // Generate unique code with collision safety
-  let roomCode = generateRandomCode();
-  let attempts = 0;
-  while (attempts < 5) {
-    try {
-      const checkSnap = await getDoc(doc(db, 'rooms', roomCode));
-      if (!checkSnap.exists()) break;
-      roomCode = generateRandomCode();
-    } catch (checkErr: any) {
-      // In Firestore, if a document doesn't exist in local cache and connection is establishing,
-      // getDoc rejects with "Failed to get document because the client is offline."
-      // Since roomCode is a 6-character random string from 32 alphanumeric chars (1,073,741,824 combinations),
-      // encountering this error means the document does not exist in local cache and the code is safe to use.
-      break;
-    }
-    attempts++;
-  }
-
+  // Generate unique 6-char alphanumeric room code (1,073,741,824 possible combinations)
+  const roomCode = generateRandomCode();
   const roomRef = doc(db, 'rooms', roomCode);
   const hostSessionToken = generateSessionToken('hst');
   const now = Date.now();
@@ -240,7 +225,7 @@ export async function createOnlineRoom(
     batch.set(roomRef, sanitizeForFirestore(initialRoom));
     const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
     batch.set(playerRef, sanitizeForFirestore(initialPlayer));
-    await batch.commit();
+    await withTimeout(batch.commit(), 8000);
 
     // Store session tokens locally
     sessionStorage.setItem(`dhappabaj_host_token_${roomCode}`, hostSessionToken);
@@ -252,17 +237,18 @@ export async function createOnlineRoom(
     const isOffline =
       error?.message?.includes('offline') ||
       error?.code === 'unavailable' ||
-      error?.message?.includes('unavailable');
+      error?.message?.includes('unavailable') ||
+      error?.message?.includes('timed out');
 
     if (isOffline) {
       try {
         await enableNetwork(db);
-        await new Promise((r) => setTimeout(r, 400));
+        await new Promise((r) => setTimeout(r, 300));
         const retryBatch = writeBatch(db);
         retryBatch.set(roomRef, sanitizeForFirestore(initialRoom));
         const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
         retryBatch.set(playerRef, sanitizeForFirestore(initialPlayer));
-        await retryBatch.commit();
+        await withTimeout(retryBatch.commit(), 8000);
 
         sessionStorage.setItem(`dhappabaj_host_token_${roomCode}`, hostSessionToken);
         sessionStorage.setItem('dhappabaj_active_room', roomCode);
