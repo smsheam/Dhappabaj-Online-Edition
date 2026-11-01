@@ -119,6 +119,11 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
         err?.code === 'auth/admin-restricted-operation' ||
         err?.message?.includes('admin-restricted-operation');
 
+      const isOffline =
+        err?.message?.includes('offline') ||
+        err?.code === 'unavailable' ||
+        err?.message?.includes('unavailable');
+
       if (isRestricted) {
         setNeedsGoogleSignIn(true);
         setError(
@@ -126,8 +131,21 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
             ? 'Anonymous guest login is not enabled in Firebase yet. Click below to continue with Google or enable Anonymous in Firebase Console.'
             : 'প্রজেক্টে অ্যানোনিমাস লগইন সক্রিয় নেই। নিচে Google দিয়ে প্রবেশ করুন অথবা Firebase Console এ Anonymous চালু করুন।'
         );
+      } else if (isOffline) {
+        setError(
+          isEn
+            ? 'Network connection issue. Please check your internet connection and retry.'
+            : 'নেটওয়ার্ক সংযোগে সমস্যা হচ্ছে। আপনার ইন্টারনেট সংযোগ পরীক্ষা করে পুনরায় চেষ্টা করুন।'
+        );
       } else {
-        setError(err?.message || (isEn ? 'Failed to create room' : 'রুম তৈরি করতে সমস্যা হয়েছে'));
+        let cleanMsg = err?.message || '';
+        try {
+          if (cleanMsg.startsWith('{') && cleanMsg.endsWith('}')) {
+            const parsed = JSON.parse(cleanMsg);
+            cleanMsg = parsed.error || cleanMsg;
+          }
+        } catch {}
+        setError(cleanMsg || (isEn ? 'Failed to create room' : 'রুম তৈরি করতে সমস্যা হয়েছে'));
       }
     } finally {
       setLoading(false);
@@ -173,6 +191,11 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
         err?.code === 'auth/admin-restricted-operation' ||
         err?.message?.includes('admin-restricted-operation');
 
+      const isOffline =
+        err?.message?.includes('offline') ||
+        err?.code === 'unavailable' ||
+        err?.message?.includes('unavailable');
+
       if (isRestricted) {
         setNeedsGoogleSignIn(true);
         setError(
@@ -180,8 +203,21 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
             ? 'Anonymous guest login is not enabled in Firebase yet. Click below to continue with Google or enable Anonymous in Firebase Console.'
             : 'প্রজেক্টে অ্যানোনিমাস লগইন সক্রিয় নেই। নিচে Google দিয়ে প্রবেশ করুন অথবা Firebase Console এ Anonymous চালু করুন।'
         );
+      } else if (isOffline) {
+        setError(
+          isEn
+            ? 'Network connection issue. Please check your internet connection and retry.'
+            : 'নেটওয়ার্ক সংযোগে সমস্যা হচ্ছে। আপনার ইন্টারনেট সংযোগ পরীক্ষা করে পুনরায় চেষ্টা করুন।'
+        );
       } else {
-        setError(err?.message || (isEn ? 'Failed to join room' : 'রুমে যোগ দিতে সমস্যা হয়েছে'));
+        let cleanMsg = err?.message || '';
+        try {
+          if (cleanMsg.startsWith('{') && cleanMsg.endsWith('}')) {
+            const parsed = JSON.parse(cleanMsg);
+            cleanMsg = parsed.error || cleanMsg;
+          }
+        } catch {}
+        setError(cleanMsg || (isEn ? 'Failed to join room' : 'রুমে যোগ দিতে সমস্যা হয়েছে'));
       }
     } finally {
       setLoading(false);

@@ -8,8 +8,60 @@ import {
   deleteDoc,
   onSnapshot,
   writeBatch,
+  DocumentReference,
+  DocumentSnapshot,
+  Query,
+  CollectionReference,
+  QuerySnapshot,
+  enableNetwork,
 } from 'firebase/firestore';
 import { db, auth, ensureAuthenticatedUser, handleFirestoreError, OperationType } from '../firebase';
+
+// Helper to safely execute getDoc with automatic retry and network reconnection
+export async function safeGetDoc(docRef: DocumentReference): Promise<DocumentSnapshot> {
+  try {
+    return await getDoc(docRef);
+  } catch (err: any) {
+    const isOffline =
+      err?.message?.includes('offline') ||
+      err?.code === 'unavailable' ||
+      err?.message?.includes('unavailable');
+
+    if (isOffline) {
+      try {
+        await enableNetwork(db);
+        await new Promise((r) => setTimeout(r, 350));
+        return await getDoc(docRef);
+      } catch {
+        // Continue to throw if retry also fails
+      }
+    }
+    throw err;
+  }
+}
+
+// Helper to safely execute getDocs with automatic retry and network reconnection
+export async function safeGetDocs(queryRef: Query | CollectionReference): Promise<QuerySnapshot> {
+  try {
+    return await getDocs(queryRef);
+  } catch (err: any) {
+    const isOffline =
+      err?.message?.includes('offline') ||
+      err?.code === 'unavailable' ||
+      err?.message?.includes('unavailable');
+
+    if (isOffline) {
+      try {
+        await enableNetwork(db);
+        await new Promise((r) => setTimeout(r, 350));
+        return await getDocs(queryRef);
+      } catch {
+        // Continue to throw if retry also fails
+      }
+    }
+    throw err;
+  }
+}
 import {
   OnlineRoomData,
   OnlinePlayer,
@@ -90,7 +142,7 @@ export async function createOnlineRoom(
   if (previousRoomCode) {
     try {
       const prevRef = doc(db, 'rooms', previousRoomCode);
-      const prevSnap = await getDoc(prevRef);
+      const prevSnap = await safeGetDoc(prevRef);
       if (prevSnap.exists()) {
         const prevData = prevSnap.data() as OnlineRoomData;
         if (prevData.hostId === user.uid && (prevData.status === 'WAITING' || (prevData.status as string) === 'waiting')) {
@@ -112,9 +164,17 @@ export async function createOnlineRoom(
   let roomCode = generateRandomCode();
   let attempts = 0;
   while (attempts < 5) {
-    const checkSnap = await getDoc(doc(db, 'rooms', roomCode));
-    if (!checkSnap.exists()) break;
-    roomCode = generateRandomCode();
+    try {
+      const checkSnap = await getDoc(doc(db, 'rooms', roomCode));
+      if (!checkSnap.exists()) break;
+      roomCode = generateRandomCode();
+    } catch (checkErr: any) {
+      // In Firestore, if a document doesn't exist in local cache and connection is establishing,
+      // getDoc rejects with "Failed to get document because the client is offline."
+      // Since roomCode is a 6-character random string from 32 alphanumeric chars (1,073,741,824 combinations),
+      // encountering this error means the document does not exist in local cache and the code is safe to use.
+      break;
+    }
     attempts++;
   }
 
@@ -174,7 +234,32 @@ export async function createOnlineRoom(
     sessionStorage.setItem('dhappabaj_player_id', user.uid);
 
     return { roomCode, player: initialPlayer, roomData: initialRoom };
-  } catch (error) {
+  } catch (error: any) {
+    const isOffline =
+      error?.message?.includes('offline') ||
+      error?.code === 'unavailable' ||
+      error?.message?.includes('unavailable');
+
+    if (isOffline) {
+      try {
+        await enableNetwork(db);
+        await new Promise((r) => setTimeout(r, 400));
+        const retryBatch = writeBatch(db);
+        retryBatch.set(roomRef, sanitizeForFirestore(initialRoom));
+        const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
+        retryBatch.set(playerRef, sanitizeForFirestore(initialPlayer));
+        await retryBatch.commit();
+
+        sessionStorage.setItem(`dhappabaj_host_token_${roomCode}`, hostSessionToken);
+        sessionStorage.setItem('dhappabaj_active_room', roomCode);
+        sessionStorage.setItem('dhappabaj_player_id', user.uid);
+
+        return { roomCode, player: initialPlayer, roomData: initialRoom };
+      } catch (retryErr) {
+        handleFirestoreError(retryErr, OperationType.CREATE, `rooms/${roomCode}`);
+        throw retryErr;
+      }
+    }
     handleFirestoreError(error, OperationType.CREATE, `rooms/${roomCode}`);
     throw error;
   }
@@ -196,7 +281,7 @@ export async function joinOnlineRoom(
   const roomRef = doc(db, 'rooms', roomCode);
   let roomSnap;
   try {
-    roomSnap = await getDoc(roomRef);
+    roomSnap = await safeGetDoc(roomRef);
   } catch (err) {
     handleFirestoreError(err, OperationType.GET, `rooms/${roomCode}`);
     throw err;
@@ -238,7 +323,7 @@ export async function joinOnlineRoom(
 
   // Fetch current players
   const playersColl = collection(db, 'rooms', roomCode, 'players');
-  const playersSnap = await getDocs(playersColl);
+  const playersSnap = await safeGetDocs(playersColl);
   const existingPlayers = playersSnap.docs.map((d) => d.data() as OnlinePlayer);
 
   // Check if player is already in this room (reconnection)
@@ -376,7 +461,7 @@ export async function leaveOnlineRoom(roomCode: string) {
   const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
 
   try {
-    const roomSnap = await getDoc(roomRef);
+    const roomSnap = await safeGetDoc(roomRef);
     if (!roomSnap.exists()) {
       sessionStorage.removeItem('dhappabaj_active_room');
       return;
@@ -401,7 +486,7 @@ export async function leaveOnlineRoom(roomCode: string) {
       // Ordinary player leaving
       await deleteDoc(playerRef);
 
-      const playersSnap = await getDocs(collection(db, 'rooms', roomCode, 'players'));
+      const playersSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'players'));
       const remainingPlayers = playersSnap.docs.map((d) => d.data() as OnlinePlayer);
 
       if (remainingPlayers.length === 0) {
@@ -621,7 +706,7 @@ export async function kickOnlinePlayer(roomCode: string, targetPlayerId: string)
   try {
     await deleteDoc(playerRef);
     const roomRef = doc(db, 'rooms', roomCode);
-    const playersSnap = await getDocs(collection(db, 'rooms', roomCode, 'players'));
+    const playersSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'players'));
     await updateDoc(roomRef, {
       playerCount: playersSnap.size,
       lastActivityAt: Date.now(),
@@ -635,11 +720,11 @@ export async function kickOnlinePlayer(roomCode: string, targetPlayerId: string)
 // Host starts the online game
 export async function startOnlineRound(roomCode: string, roundNumber: number = 1) {
   const roomRef = doc(db, 'rooms', roomCode);
-  const roomSnap = await getDoc(roomRef);
+  const roomSnap = await safeGetDoc(roomRef);
   if (!roomSnap.exists()) return;
 
   const roomData = roomSnap.data() as OnlineRoomData;
-  const playersSnap = await getDocs(collection(db, 'rooms', roomCode, 'players'));
+  const playersSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'players'));
   const players = playersSnap.docs.map((d) => d.data() as OnlinePlayer);
 
   if (players.length < 3) {
@@ -701,13 +786,13 @@ export async function startOnlineRound(roomCode: string, roundNumber: number = 1
   });
 
   // Delete previous votes if any
-  const votesSnap = await getDocs(collection(db, 'rooms', roomCode, 'votes'));
+  const votesSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'votes'));
   votesSnap.docs.forEach((vDoc) => {
     batch.delete(vDoc.ref);
   });
 
   // Delete previous messages if any
-  const msgsSnap = await getDocs(collection(db, 'rooms', roomCode, 'messages'));
+  const msgsSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'messages'));
   msgsSnap.docs.forEach((mDoc) => {
     batch.delete(mDoc.ref);
   });
@@ -813,14 +898,14 @@ export async function castOnlineVote(roomCode: string, suspectId: string) {
 // Resolve voting results
 export async function resolveOnlineVotingResults(roomCode: string) {
   const roomRef = doc(db, 'rooms', roomCode);
-  const roomSnap = await getDoc(roomRef);
+  const roomSnap = await safeGetDoc(roomRef);
   if (!roomSnap.exists()) return;
 
   const roomData = roomSnap.data() as OnlineRoomData;
-  const playersSnap = await getDocs(collection(db, 'rooms', roomCode, 'players'));
+  const playersSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'players'));
   const players = playersSnap.docs.map((d) => d.data() as OnlinePlayer);
 
-  const votesSnap = await getDocs(collection(db, 'rooms', roomCode, 'votes'));
+  const votesSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'votes'));
   const votesMap: Record<string, string> = {};
   votesSnap.docs.forEach((d) => {
     const v = d.data() as OnlineVote;
@@ -917,7 +1002,7 @@ export async function submitOnlineImposterGuess(
   guess: string
 ) {
   const roomRef = doc(db, 'rooms', roomCode);
-  const roomSnap = await getDoc(roomRef);
+  const roomSnap = await safeGetDoc(roomRef);
   if (!roomSnap.exists()) return;
 
   const roomData = roomSnap.data() as OnlineRoomData;

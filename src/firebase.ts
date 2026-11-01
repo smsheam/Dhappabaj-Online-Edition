@@ -7,7 +7,12 @@ import {
   onAuthStateChanged,
   User,
 } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import {
+  getFirestore,
+  initializeFirestore,
+  enableNetwork,
+  Firestore,
+} from 'firebase/firestore';
 import defaultAppletConfig from '../firebase-applet-config.json';
 
 const firebaseConfig = {
@@ -23,8 +28,21 @@ const firebaseConfig = {
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore with specific database ID from config (CRITICAL as per skill)
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Initialize Firestore with specific database ID from config and auto-detect long polling
+let firestoreInstance: Firestore;
+try {
+  firestoreInstance = initializeFirestore(
+    app,
+    {
+      experimentalAutoDetectLongPolling: true,
+    },
+    firebaseConfig.firestoreDatabaseId
+  );
+} catch {
+  firestoreInstance = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+}
+
+export const db = firestoreInstance;
 
 // Initialize Firebase Auth
 export const auth = getAuth(app);
@@ -141,14 +159,14 @@ export async function ensureAuthenticatedUser(): Promise<User> {
   });
 }
 
-// Validate connection to Firestore on boot
-export async function testConnection() {
+// Ensure network is active
+export async function ensureFirestoreConnected(): Promise<void> {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    await enableNetwork(db);
   } catch {
-    // Expected when test doc does not exist or rules are active
+    // Already active or unsupported
   }
 }
 
-// Run test connection
-testConnection();
+// Proactively initiate connection without blocking or failing on missing doc
+ensureFirestoreConnected();
