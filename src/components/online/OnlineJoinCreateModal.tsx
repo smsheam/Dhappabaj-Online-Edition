@@ -5,7 +5,7 @@ import { PLAYER_AVATARS } from '../../data/avatars';
 import { createOnlineRoom, joinOnlineRoom, DEFAULT_ONLINE_SETTINGS } from '../../services/multiplayerService';
 import { sound } from '../../utils/audio';
 import { OnlinePlayer, OnlineRoomData } from '../../types/multiplayer';
-import { signInWithGoogle, auth } from '../../firebase';
+import { signInWithGoogle, auth, ensureAuthenticatedUser } from '../../firebase';
 
 interface OnlineJoinCreateModalProps {
   isOpen: boolean;
@@ -38,6 +38,11 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [needsGoogleSignIn, setNeedsGoogleSignIn] = useState<boolean>(false);
+
+  // Eagerly ensure auth on mount
+  useEffect(() => {
+    ensureAuthenticatedUser().catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (initialRoomCode) {
@@ -103,11 +108,11 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
             reject(
               new Error(
                 isEn
-                  ? 'Connection timeout. Please check your internet and retry.'
+                  ? 'Connection timeout. Please check your internet connection and retry.'
                   : 'সংযোগের সময় শেষ হয়েছে। ইন্টারনেট সংযোগ পরীক্ষা করে পুনরায় চেষ্টা করুন।'
               )
             ),
-          12000
+          35000
         )
       );
 
@@ -175,11 +180,11 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
             reject(
               new Error(
                 isEn
-                  ? 'Connection timeout. Please check your internet and retry.'
+                  ? 'Connection timeout. Please check your internet connection and retry.'
                   : 'সংযোগের সময় শেষ হয়েছে। ইন্টারনেট সংযোগ পরীক্ষা করে পুনরায় চেষ্টা করুন।'
               )
             ),
-          12000
+          35000
         )
       );
 

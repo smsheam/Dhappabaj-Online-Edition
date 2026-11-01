@@ -73,6 +73,18 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
   const currentUserId = auth.currentUser?.uid || initialPlayer.id;
   const isHost = room.hostId === currentUserId;
 
+  const roomStateRef = React.useRef<OnlineRoomData>(initialRoom);
+  const hasSeenSelfInRoomRef = React.useRef<boolean>(false);
+  const playersStateRef = React.useRef<OnlinePlayer[]>([initialPlayer]);
+
+  useEffect(() => {
+    roomStateRef.current = room;
+  }, [room]);
+
+  useEffect(() => {
+    playersStateRef.current = players;
+  }, [players]);
+
   // Real-time Firestore Subscriptions
   useEffect(() => {
     const unsubRoom = subscribeToOnlineRoom(
@@ -106,9 +118,12 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
       initialRoom.roomCode,
       (updatedPlayers) => {
         setPlayers(updatedPlayers);
-        // Check if current user is still in the players list
+        // Check if current user is confirmed in the players list
         const stillInRoom = updatedPlayers.some((p) => p.id === currentUserId);
-        if (!stillInRoom && updatedPlayers.length > 0) {
+        if (stillInRoom) {
+          hasSeenSelfInRoomRef.current = true;
+        } else if (hasSeenSelfInRoomRef.current && updatedPlayers.length > 0) {
+          // Only trigger left if user was previously seen in the room and then removed
           setClosedReason('host_left');
           setRoomClosed(true);
         }
@@ -135,35 +150,22 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
 
     // Heartbeat every 10 seconds & check inactivity / host disconnect
     const heartbeatInterval = setInterval(async () => {
-      const myPlayer = players.find((p) => p.id === currentUserId);
+      const myPlayer = playersStateRef.current.find((p) => p.id === currentUserId);
       if (myPlayer) {
         await sendPlayerHeartbeat(initialRoom.roomCode, isHost, myPlayer.name, myPlayer.avatar);
       }
       // Check inactivity & host disconnect expiration
-      await checkAndExpireRoomIfNeeded(initialRoom.roomCode, room);
+      await checkAndExpireRoomIfNeeded(initialRoom.roomCode, roomStateRef.current);
     }, 10000);
 
-    // Window beforeunload / visibility listener for unexpected disconnects
+    // Window beforeunload listener for intentional tab close
     const handleBeforeUnload = () => {
-      if (isHost) {
+      if (isHost && roomStateRef.current.status === 'PLAYING') {
         setHostDisconnected(initialRoom.roomCode, true);
       }
     };
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        if (isHost) {
-          setHostDisconnected(initialRoom.roomCode, true);
-        }
-      } else if (document.visibilityState === 'visible') {
-        if (isHost) {
-          setHostDisconnected(initialRoom.roomCode, false);
-        }
-      }
-    };
-
     window.addEventListener('beforeunload', handleBeforeUnload);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       unsubRoom();
@@ -172,9 +174,8 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
       unsubVotes();
       clearInterval(heartbeatInterval);
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [initialRoom.roomCode, currentUserId, isHost, room]);
+  }, [initialRoom.roomCode, currentUserId, isHost]);
 
   // Host disconnect countdown tracker (30 seconds)
   useEffect(() => {

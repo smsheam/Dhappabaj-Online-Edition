@@ -168,5 +168,6 @@ export async function ensureFirestoreConnected(): Promise<void> {
   }
 }
 
-// Proactively initiate connection without blocking or failing on missing doc
+// Proactively initiate connection and authenticate without blocking
 ensureFirestoreConnected();
+ensureAuthenticatedUser().catch(() => {});

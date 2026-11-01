@@ -19,48 +19,62 @@ import { db, auth, ensureAuthenticatedUser, handleFirestoreError, OperationType 
 
 // Helper to safely execute getDoc with automatic retry and network reconnection
 export async function safeGetDoc(docRef: DocumentReference): Promise<DocumentSnapshot> {
-  try {
-    return await getDoc(docRef);
-  } catch (err: any) {
-    const isOffline =
-      err?.message?.includes('offline') ||
-      err?.code === 'unavailable' ||
-      err?.message?.includes('unavailable');
+  let attempts = 0;
+  while (attempts < 3) {
+    try {
+      return await getDoc(docRef);
+    } catch (err: any) {
+      attempts++;
+      const isOffline =
+        err?.message?.includes('offline') ||
+        err?.code === 'unavailable' ||
+        err?.message?.includes('unavailable');
 
-    if (isOffline) {
-      try {
-        await enableNetwork(db);
-        await new Promise((r) => setTimeout(r, 350));
-        return await getDoc(docRef);
-      } catch {
-        // Continue to throw if retry also fails
+      if (isOffline && attempts < 3) {
+        try {
+          await enableNetwork(db);
+          await new Promise((r) => setTimeout(r, 300 * attempts));
+          continue;
+        } catch {
+          // Continue to next attempt
+        }
+      }
+      if (attempts >= 3) {
+        throw err;
       }
     }
-    throw err;
   }
+  return await getDoc(docRef);
 }
 
 // Helper to safely execute getDocs with automatic retry and network reconnection
 export async function safeGetDocs(queryRef: Query | CollectionReference): Promise<QuerySnapshot> {
-  try {
-    return await getDocs(queryRef);
-  } catch (err: any) {
-    const isOffline =
-      err?.message?.includes('offline') ||
-      err?.code === 'unavailable' ||
-      err?.message?.includes('unavailable');
+  let attempts = 0;
+  while (attempts < 3) {
+    try {
+      return await getDocs(queryRef);
+    } catch (err: any) {
+      attempts++;
+      const isOffline =
+        err?.message?.includes('offline') ||
+        err?.code === 'unavailable' ||
+        err?.message?.includes('unavailable');
 
-    if (isOffline) {
-      try {
-        await enableNetwork(db);
-        await new Promise((r) => setTimeout(r, 350));
-        return await getDocs(queryRef);
-      } catch {
-        // Continue to throw if retry also fails
+      if (isOffline && attempts < 3) {
+        try {
+          await enableNetwork(db);
+          await new Promise((r) => setTimeout(r, 300 * attempts));
+          continue;
+        } catch {
+          // Continue to next attempt
+        }
+      }
+      if (attempts >= 3) {
+        throw err;
       }
     }
-    throw err;
   }
+  return await getDocs(queryRef);
 }
 import {
   OnlineRoomData,
@@ -81,8 +95,8 @@ const ROOM_CODE_CHARACTERS = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const CODE_LENGTH = 6;
 
 // Inactivity limits
-export const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-export const HOST_DISCONNECT_GRACE_MS = 30 * 1000; // 30 seconds
+export const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+export const HOST_DISCONNECT_GRACE_MS = 60 * 1000; // 60 seconds grace period
 
 const AVATAR_COLORS = [
   'bg-amber-500',
@@ -600,8 +614,9 @@ export async function checkAndExpireRoomIfNeeded(
 
   const roomRef = doc(db, 'rooms', roomCode);
 
-  // Check 1: Host disconnected for > 30 seconds
-  if (roomData.hostDisconnectedAt && now - roomData.hostDisconnectedAt > HOST_DISCONNECT_GRACE_MS) {
+  // Check 1: Host disconnected for > grace period (only active during PLAYING, not in LOBBY/WAITING)
+  const isPlaying = roomData.status === 'PLAYING' || (roomData.status as string) === 'playing';
+  if (isPlaying && roomData.hostDisconnectedAt && now - roomData.hostDisconnectedAt > HOST_DISCONNECT_GRACE_MS) {
     try {
       await updateDoc(roomRef, {
         status: 'CLOSED',
@@ -614,9 +629,10 @@ export async function checkAndExpireRoomIfNeeded(
     }
   }
 
-  // Check 2: 5 minutes inactivity
+  // Check 2: Inactivity timeout (15 mins in lobby/waiting, 10 mins during active game)
+  const maxInactivity = !isPlaying ? 15 * 60 * 1000 : INACTIVITY_TIMEOUT_MS;
   const lastActive = roomData.lastActivityAt || roomData.updatedAt || roomData.createdAt || 0;
-  if (now - lastActive > INACTIVITY_TIMEOUT_MS) {
+  if (now - lastActive > maxInactivity) {
     try {
       await updateDoc(roomRef, {
         status: 'EXPIRED',
