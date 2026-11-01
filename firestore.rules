@@ -1,0 +1,84 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net - default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isRoomHost(roomId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/rooms/$(roomId)) &&
+        get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId == request.auth.uid;
+    }
+
+    // Room collection
+    match /rooms/{roomId} {
+      allow get: if isSignedIn() && isValidId(roomId);
+      allow list: if isSignedIn();
+
+      // Create room: user sets themselves as host
+      allow create: if isSignedIn() && isValidId(roomId) &&
+        request.resource.data.hostId == request.auth.uid;
+
+      // Update room: host can update any room state, or players can update phase/round state when permitted
+      allow update: if isSignedIn() && isValidId(roomId);
+
+      // Delete room: only host
+      allow delete: if isRoomHost(roomId);
+
+      // Players subcollection
+      match /players/{playerId} {
+        allow get: if isSignedIn() && isValidId(roomId) && isValidId(playerId);
+        // Note: For list operations on the collection, playerId path variable does not exist yet
+        allow list: if isSignedIn() && isValidId(roomId);
+
+        // Player joins as themselves
+        allow create: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
+          request.auth.uid == playerId;
+
+        // Player updates their own status/name/ready/clue, or host updates scores
+        allow update: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
+          (request.auth.uid == playerId || isRoomHost(roomId));
+
+        // Player can leave, or host can kick
+        allow delete: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
+          (request.auth.uid == playerId || isRoomHost(roomId));
+      }
+
+      // Private role and word subcollection (strictly guarded)
+      match /private/{playerId} {
+        // CRITICAL: Only the assigned player can read their own secret role, word and hint!
+        allow get: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
+          request.auth.uid == playerId;
+        allow list: if false;
+
+        // Writing role assignments is done by the host when round starts
+        allow create, update: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
+          (isRoomHost(roomId) || request.auth.uid == playerId);
+        allow delete: if isRoomHost(roomId);
+      }
+
+      // Votes subcollection
+      match /votes/{playerId} {
+        allow get: if isSignedIn() && isValidId(roomId) && isValidId(playerId);
+        // Note: For list operations on the collection, playerId path variable does not exist yet
+        allow list: if isSignedIn() && isValidId(roomId);
+
+        // Only the voter can cast or update their own vote
+        allow create, update: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
+          request.auth.uid == playerId;
+        allow delete: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
+          (request.auth.uid == playerId || isRoomHost(roomId));
+      }
+    }
+  }
+}

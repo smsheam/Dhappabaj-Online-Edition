@@ -1,0 +1,98 @@
+{
+  "entities": {
+    "Room": {
+      "title": "Room",
+      "description": "Multiplayer game room state and settings",
+      "type": "object",
+      "properties": {
+        "roomCode": { "type": "string", "maxLength": 6 },
+        "hostId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["waiting", "in_progress", "ended"] },
+        "currentPhase": {
+          "type": "string",
+          "enum": [
+            "LOBBY",
+            "ROLE_REVEAL",
+            "CLUE",
+            "DISCUSSION",
+            "VOTING",
+            "RESULT",
+            "IMPOSTER_GUESS",
+            "ROUND_SUMMARY",
+            "GAME_OVER"
+          ]
+        },
+        "round": { "type": "number" },
+        "totalRounds": { "type": "number" },
+        "playerCount": { "type": "number" },
+        "phaseEndsAt": { "type": "number" },
+        "currentWordCategory": { "type": "string", "maxLength": 64 },
+        "imposterGuessResult": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["roomCode", "hostId", "status", "currentPhase", "round", "totalRounds"]
+    },
+    "Player": {
+      "title": "Player",
+      "description": "Joined player profile and round state",
+      "type": "object",
+      "properties": {
+        "playerId": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "avatar": { "type": "string", "maxLength": 16 },
+        "color": { "type": "string", "maxLength": 32 },
+        "titleBn": { "type": "string", "maxLength": 64 },
+        "titleEn": { "type": "string", "maxLength": 64 },
+        "isReady": { "type": "boolean" },
+        "isHost": { "type": "boolean" },
+        "score": { "type": "number" },
+        "hasVoted": { "type": "boolean" },
+        "clue": { "type": "string", "maxLength": 120 },
+        "connectionStatus": { "type": "string", "enum": ["online", "offline"] }
+      },
+      "required": ["playerId", "displayName", "avatar", "color", "isReady", "isHost", "score"]
+    },
+    "PrivateRole": {
+      "title": "PrivateRole",
+      "description": "Secret role and word or hint info accessible only to assigned player",
+      "type": "object",
+      "properties": {
+        "playerId": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "enum": ["innocent", "imposter"] },
+        "wordBn": { "type": "string", "maxLength": 64 },
+        "wordEn": { "type": "string", "maxLength": 64 },
+        "hintBn": { "type": "string", "maxLength": 128 },
+        "hintEn": { "type": "string", "maxLength": 128 },
+        "category": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["playerId", "role"]
+    },
+    "Vote": {
+      "title": "Vote",
+      "description": "Individual vote cast during the voting phase",
+      "type": "object",
+      "properties": {
+        "voterId": { "type": "string", "maxLength": 128 },
+        "suspectId": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["voterId", "suspectId"]
+    }
+  },
+  "firestore": {
+    "/rooms/{roomId}": {
+      "schema": "Room",
+      "description": "Rooms collection holding public game state and host settings"
+    },
+    "/rooms/{roomId}/players/{playerId}": {
+      "schema": "Player",
+      "description": "Players participating in the room"
+    },
+    "/rooms/{roomId}/private/{playerId}": {
+      "schema": "PrivateRole",
+      "description": "Secure private role information accessible only to the specific player"
+    },
+    "/rooms/{roomId}/votes/{playerId}": {
+      "schema": "Vote",
+      "description": "Individual player votes cast during voting phase"
+    }
+  }
+}

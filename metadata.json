@@ -1,0 +1,8 @@
+{
+  "name": "ধাপ্পাবাজ (Dhappabaj - online edition)",
+  "description": "বাংলা সোশ্যাল ডিডাকশন পার্টি গেম - ৪ থেকে ১০ জন খেলোয়াড়ের জন্য ধাপ্পাবাজ খোঁজার রোমাঞ্চকর খেলা। ৬০০টি শব্দের সমৃদ্ধ ভাণ্ডার!",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
