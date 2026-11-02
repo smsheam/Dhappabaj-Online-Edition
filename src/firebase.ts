@@ -6,6 +6,9 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged,
   User,
+  setPersistence,
+  browserSessionPersistence,
+  signOut,
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -49,6 +52,13 @@ export const db = firestoreInstance;
 
 // Initialize Firebase Auth
 export const auth = getAuth(app);
+
+// Use session persistence so tabs and browser refreshes remain isolated and clean
+try {
+  setPersistence(auth, browserSessionPersistence).catch(() => {});
+} catch {
+  // Ignored if unsupported in certain environments
+}
 
 export const googleProvider = new GoogleAuthProvider();
 
@@ -106,29 +116,37 @@ export async function signInWithGoogle(): Promise<User> {
 let authInitPromise: Promise<User> | null = null;
 
 // Ensure authenticated user (tries existing session, then anonymous auth, with safety timeout)
-export async function ensureAuthenticatedUser(): Promise<User> {
-  if (auth.currentUser) {
+export async function ensureAuthenticatedUser(forceFresh: boolean = false): Promise<User> {
+  if (forceFresh && auth.currentUser?.isAnonymous) {
+    try {
+      await signOut(auth);
+    } catch {}
+  }
+
+  if (!forceFresh && auth.currentUser) {
     return auth.currentUser;
   }
 
-  if (authInitPromise) {
+  if (!forceFresh && authInitPromise) {
     return authInitPromise;
   }
 
   authInitPromise = (async () => {
     try {
-      // 1. Wait briefly for stored credentials (IndexedDB / LocalStorage) to hydrate
-      try {
-        await Promise.race([
-          auth.authStateReady(),
-          new Promise((r) => setTimeout(r, 1500)),
-        ]);
-      } catch {
-        // Fallthrough to direct check
-      }
+      if (!forceFresh) {
+        // 1. Wait briefly for stored session credentials to hydrate
+        try {
+          await Promise.race([
+            auth.authStateReady(),
+            new Promise((r) => setTimeout(r, 1200)),
+          ]);
+        } catch {
+          // Fallthrough
+        }
 
-      if (auth.currentUser) {
-        return auth.currentUser;
+        if (auth.currentUser) {
+          return auth.currentUser;
+        }
       }
 
       // 2. Sign in anonymously with a 14s safety timeout
@@ -150,6 +168,20 @@ export async function ensureAuthenticatedUser(): Promise<User> {
   return authInitPromise;
 }
 
+// Reset to a completely fresh session (clears lingering stored names/active rooms/anonymous UID)
+export async function resetToFreshSession(): Promise<User> {
+  try {
+    sessionStorage.clear();
+    localStorage.removeItem('dhappabaj_name');
+    localStorage.removeItem('dhappabaj_avatar');
+    localStorage.removeItem('dhappabaj_active_room');
+    if (auth.currentUser && auth.currentUser.isAnonymous) {
+      await signOut(auth);
+    }
+  } catch {}
+  return ensureAuthenticatedUser(true);
+}
+
 // Ensure network is active
 export async function ensureFirestoreConnected(): Promise<void> {
   try {
@@ -162,4 +194,5 @@ export async function ensureFirestoreConnected(): Promise<void> {
 // Proactively initiate connection and authenticate without blocking
 ensureFirestoreConnected();
 ensureAuthenticatedUser().catch(() => {});
+
 

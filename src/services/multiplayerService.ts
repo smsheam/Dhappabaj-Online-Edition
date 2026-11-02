@@ -15,7 +15,7 @@ import {
   QuerySnapshot,
   enableNetwork,
 } from 'firebase/firestore';
-import { db, auth, ensureAuthenticatedUser, handleFirestoreError, OperationType } from '../firebase';
+import { db, auth, ensureAuthenticatedUser, resetToFreshSession, handleFirestoreError, OperationType } from '../firebase';
 import { logProductionEvent } from '../utils/productionDiagnostics';
 
 // Timeout helper to prevent infinite hanging on mobile or unstable networks
@@ -345,11 +345,21 @@ export async function joinOnlineRoom(
   const playersSnap = await safeGetDocs(playersColl);
   const existingPlayers = playersSnap.docs.map((d) => d.data() as OnlinePlayer);
 
+  let activeUser = user;
+  const hasHostSessionForRoom = !!sessionStorage.getItem(`dhappabaj_host_token_${roomCode}`);
+
+  // CRITICAL FIX FOR MULTI-TAB & REFRESH:
+  // If this tab's auth UID happens to match the host UID (e.g. testing in 2 tabs of the same browser in normal mode),
+  // but this tab is NOT the host tab (does not have the host token), acquire a separate fresh player identity!
+  if (activeUser.uid === roomData.hostId && !hasHostSessionForRoom) {
+    activeUser = await resetToFreshSession();
+  }
+
   // Check if player is already in this room (reconnection)
-  const existingSelf = existingPlayers.find((p) => p.id === user.uid);
-  if (existingSelf) {
-    const isHost = existingSelf.isHost || user.uid === roomData.hostId;
-    const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
+  const existingSelf = existingPlayers.find((p) => p.id === activeUser.uid);
+  if (existingSelf && (hasHostSessionForRoom || existingSelf.name.toLowerCase() === playerName.trim().toLowerCase())) {
+    const isHost = existingSelf.isHost || activeUser.uid === roomData.hostId;
+    const playerRef = doc(db, 'rooms', roomCode, 'players', activeUser.uid);
 
     const playerUpdates: Record<string, any> = {
       connectionStatus: 'online',
@@ -373,7 +383,7 @@ export async function joinOnlineRoom(
       await batch.commit();
 
       sessionStorage.setItem('dhappabaj_active_room', roomCode);
-      sessionStorage.setItem('dhappabaj_player_id', user.uid);
+      sessionStorage.setItem('dhappabaj_player_id', activeUser.uid);
 
       return {
         roomData: { ...roomData, ...roomUpdates },
@@ -407,7 +417,7 @@ export async function joinOnlineRoom(
   const playerSessionToken = generateSessionToken('pst');
 
   const newPlayer: OnlinePlayer = {
-    id: user.uid,
+    id: activeUser.uid,
     sessionToken: playerSessionToken,
     name: finalName,
     avatar: playerAvatar,
@@ -425,7 +435,7 @@ export async function joinOnlineRoom(
   };
 
   try {
-    const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
+    const playerRef = doc(db, 'rooms', roomCode, 'players', activeUser.uid);
     const batch = writeBatch(db);
     batch.set(playerRef, sanitizeForFirestore(newPlayer));
     batch.update(roomRef, {
@@ -436,7 +446,7 @@ export async function joinOnlineRoom(
     await withTimeout(batch.commit(), 10000);
 
     sessionStorage.setItem('dhappabaj_active_room', roomCode);
-    sessionStorage.setItem('dhappabaj_player_id', user.uid);
+    sessionStorage.setItem('dhappabaj_player_id', activeUser.uid);
     sessionStorage.setItem(`dhappabaj_player_token_${roomCode}`, playerSessionToken);
 
     return {

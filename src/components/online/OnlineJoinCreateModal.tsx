@@ -5,7 +5,7 @@ import { PLAYER_AVATARS } from '../../data/avatars';
 import { createOnlineRoom, joinOnlineRoom, DEFAULT_ONLINE_SETTINGS } from '../../services/multiplayerService';
 import { sound } from '../../utils/audio';
 import { OnlinePlayer, OnlineRoomData } from '../../types/multiplayer';
-import { signInWithGoogle, auth, ensureAuthenticatedUser } from '../../firebase';
+import { signInWithGoogle, auth, ensureAuthenticatedUser, resetToFreshSession } from '../../firebase';
 import { testProductionConnectivity, getProductionDiagnostics, ConnectivityTestResult } from '../../utils/productionDiagnostics';
 
 interface OnlineJoinCreateModalProps {
@@ -27,12 +27,15 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
   const isEn = lang === 'en';
   const [activeTab, setActiveTab] = useState<'create' | 'join'>(initialRoomCode ? 'join' : 'create');
 
-  // Stored name & avatar in localStorage for convenience
+  // Fresh session: Do not linger old names in localStorage across page refreshes
   const [name, setName] = useState<string>(() => {
-    return localStorage.getItem('dhappabaj_name') || auth.currentUser?.displayName || '';
+    try {
+      localStorage.removeItem('dhappabaj_name');
+    } catch {}
+    return sessionStorage.getItem('dhappabaj_session_name') || '';
   });
   const [avatar, setAvatar] = useState<string>(() => {
-    return localStorage.getItem('dhappabaj_avatar') || '🕵️';
+    return sessionStorage.getItem('dhappabaj_session_avatar') || '🕵️';
   });
   const [roomCode, setRoomCode] = useState<string>(initialRoomCode);
   const [isPickingAvatar, setIsPickingAvatar] = useState<boolean>(false);
@@ -42,6 +45,21 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
   const [showDiagnostics, setShowDiagnostics] = useState<boolean>(false);
   const [diagResult, setDiagResult] = useState<ConnectivityTestResult | null>(null);
   const [testingDiag, setTestingDiag] = useState<boolean>(false);
+  const [resettingIdentity, setResettingIdentity] = useState<boolean>(false);
+
+  const handleResetSession = async () => {
+    setResettingIdentity(true);
+    sound.playClick();
+    try {
+      await resetToFreshSession();
+      setName('');
+      setError(null);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setResettingIdentity(false);
+    }
+  };
 
   const handleRunDiagnosticTest = async () => {
     setTestingDiag(true);
@@ -80,12 +98,17 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
 
   const handleNameChange = (val: string) => {
     setName(val);
-    localStorage.setItem('dhappabaj_name', val);
+    try {
+      sessionStorage.setItem('dhappabaj_session_name', val);
+      localStorage.removeItem('dhappabaj_name');
+    } catch {}
   };
 
   const handleAvatarChange = (em: string) => {
     setAvatar(em);
-    localStorage.setItem('dhappabaj_avatar', em);
+    try {
+      sessionStorage.setItem('dhappabaj_session_avatar', em);
+    } catch {}
     setIsPickingAvatar(false);
   };
 
@@ -326,9 +349,21 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
         <form onSubmit={activeTab === 'create' ? handleCreate : handleJoin} className="space-y-4">
           {/* Player Name and Avatar selection */}
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-              {isEn ? 'Your Display Name & Avatar' : 'আপনার নাম ও অবতার'}
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                {isEn ? 'Your Display Name & Avatar' : 'আপনার নাম ও অবতার'}
+              </label>
+              <button
+                type="button"
+                onClick={handleResetSession}
+                disabled={resettingIdentity}
+                className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
+                title={isEn ? 'Start as fresh new guest player' : 'নতুন খেলোয়াড় হিসেবে রিসেট করুন'}
+              >
+                <RefreshCw className={`w-3 h-3 ${resettingIdentity ? 'animate-spin' : ''}`} />
+                <span>{isEn ? 'New Identity' : 'নতুন খেলোয়াড়'}</span>
+              </button>
+            </div>
             <div className="flex items-center gap-2.5">
               <button
                 type="button"
