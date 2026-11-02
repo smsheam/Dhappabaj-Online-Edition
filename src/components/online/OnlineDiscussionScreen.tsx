@@ -60,6 +60,8 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
+  const [autoAdvancing, setAutoAdvancing] = useState<boolean>(false);
+
   useEffect(() => {
     if (!room.phaseEndsAt) return;
 
@@ -71,15 +73,16 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
         sound.playTimerTick();
       }
 
-      // If timer hits 0 and player is host, automatically transition to voting
-      if (remaining === 0 && isHost) {
+      // If timer hits 0: automatically transition to voting
+      if (remaining === 0 && !autoAdvancing) {
+        setAutoAdvancing(true);
         clearInterval(interval);
         handleStartVoting();
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [room.phaseEndsAt, isHost]);
+  }, [room.phaseEndsAt, autoAdvancing]);
 
   const handleStartVoting = async () => {
     sound.playClick();

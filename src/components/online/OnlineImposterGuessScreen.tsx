@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HelpCircle, Sparkles, Check, Send, AlertTriangle } from 'lucide-react';
 import { Language, Theme } from '../../types/game';
 import { OnlinePlayer, OnlineRoomData, PrivatePlayerRole } from '../../types/multiplayer';
@@ -60,13 +60,40 @@ export const OnlineImposterGuessScreen: React.FC<OnlineImposterGuessScreenProps>
     }
   };
 
+  const [timeLeft, setTimeLeft] = useState<number>(() => {
+    if (!room.phaseEndsAt) return 30;
+    return Math.max(0, Math.ceil((room.phaseEndsAt - Date.now()) / 1000));
+  });
+
+  useEffect(() => {
+    if (!room.phaseEndsAt) return;
+
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((room.phaseEndsAt! - Date.now()) / 1000));
+      setTimeLeft(remaining);
+
+      if (remaining === 0 && !isSubmitting) {
+        setIsSubmitting(true);
+        clearInterval(interval);
+        submitOnlineImposterGuess(room.roomCode, '(সময় শেষ)');
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [room.phaseEndsAt, isSubmitting, room.roomCode]);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between p-4 sm:p-8 max-w-xl mx-auto transition-colors duration-200">
       {/* Header */}
       <div className="text-center space-y-1">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400">
-          <AlertTriangle className="w-3.5 h-3.5" />
-          <span>{isEn ? 'Imposter Caught! Final Guess' : 'ধাপ্পাবাজ শনাক্ত! শেষ সুযোগ'}</span>
+        <div className="flex items-center justify-center gap-2">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span>{isEn ? 'Imposter Caught! Final Guess' : 'ধাপ্পাবাজ শনাক্ত! শেষ সুযোগ'}</span>
+          </div>
+          <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-slate-200 dark:bg-slate-800 text-rose-500">
+            <span>{timeLeft}s</span>
+          </div>
         </div>
         <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
           {isEn ? 'Guess the Secret Word' : 'আসল শব্দ অনুমান করুন'}

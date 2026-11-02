@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
 import {
   Trophy,
@@ -9,6 +9,10 @@ import {
   HelpCircle,
   Vote,
   Sparkles,
+  AlertTriangle,
+  Clock,
+  ShieldCheck,
+  MessageSquare,
 } from 'lucide-react';
 import { Language, Theme } from '../../types/game';
 import { OnlinePlayer, OnlineRoomData } from '../../types/multiplayer';
@@ -34,8 +38,12 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
 
   const eliminatedPlayer = players.find((p) => p.id === room.eliminatedPlayerId);
   const imposterIds = room.revealedImposterIds || [];
+  const imposters = players.filter((p) => imposterIds.includes(p.id));
   const isEliminatedImposter = eliminatedPlayer ? imposterIds.includes(eliminatedPlayer.id) : false;
   const isImposterWin = room.winner === 'imposter';
+
+  // Auto progression countdown to scoreboard (15s)
+  const [autoTimer, setAutoTimer] = useState<number>(15);
 
   useEffect(() => {
     sound.playTada();
@@ -55,13 +63,28 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
     await setOnlineRoomPhase(room.roomCode, 'ROUND_SUMMARY');
   };
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setAutoTimer((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          handleProceedToScoreboard();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [room.roomCode]);
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between p-4 sm:p-8 max-w-3xl mx-auto transition-colors duration-200">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between p-3.5 sm:p-6 max-w-3xl mx-auto transition-colors duration-200">
       {/* Top Banner */}
       <div className="text-center space-y-1">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400">
           <Trophy className="w-3.5 h-3.5" />
-          <span>{isEn ? `Round ${room.currentRound} Results` : `${room.currentRound}ম রাউন্ডের ফলাফল`}</span>
+          <span>{isEn ? `Round ${room.currentRound} Results` : `${room.currentRound}ম রাউন্ডের চূড়ান্ত ফলাফল`}</span>
         </div>
         <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
           {isImposterWin
@@ -75,48 +98,108 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
       </div>
 
       {/* Main Results Container */}
-      <div className="my-4 space-y-4">
-        {/* Eliminated Player & Secret Word Box */}
-        <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl text-center space-y-3">
-          <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-            {isEn ? 'Eliminated by Majority Vote' : 'সর্বোচ্চ ভোটে বহিষ্কৃত খেলোয়াড়'}
+      <div className="my-3 space-y-3.5">
+        {/* Requirement 6: Reveal Who was Dhappabaj & What was his clue */}
+        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-rose-950/40 via-slate-900/90 to-rose-950/30 border-2 border-rose-500/60 shadow-xl space-y-3">
+          <div className="flex items-center justify-between border-b border-rose-500/30 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🕵️</span>
+              <h3 className="text-sm font-black text-rose-400 uppercase tracking-wider">
+                {isEn ? 'The Real Dhappabaj (Imposter)' : 'আসল ধাপ্পাবাজ পরিচয় ও ক্লু'}
+              </h3>
+            </div>
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white shadow-xs">
+              {imposters.length} {isEn ? 'Imposter' : 'ধাপ্পাবাজ'}
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {imposters.map((imp) => (
+              <div
+                key={imp.id}
+                className="p-3.5 rounded-2xl bg-black/40 border border-rose-500/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/50 flex items-center justify-center text-2xl shrink-0">
+                    {imp.avatar || '🕵️'}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-base font-black text-white truncate">
+                      {imp.name}
+                    </div>
+                    <div className="text-xs text-rose-300">
+                      {isEn ? imp.titleEn : imp.titleBn}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dhappabaj Clue Reveal */}
+                <div className="w-full sm:w-auto p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-center sm:text-right">
+                  <div className="text-[10px] font-bold text-rose-300 uppercase tracking-wider flex items-center justify-center sm:justify-end gap-1">
+                    <MessageSquare className="w-3 h-3" />
+                    <span>{isEn ? 'Clue given by Dhappabaj:' : 'ধাপ্পাবাজের দেওয়া ক্লু:'}</span>
+                  </div>
+                  <div className="text-sm font-black text-amber-300">
+                    "{imp.clue || (isEn ? 'No clue provided' : 'কোনো ক্লু দেননি')}"
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Requirement 6: Mention Player Selected / Accused by Majority Vote */}
+        <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-md space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+            <div className="flex items-center gap-2">
+              <Vote className="w-4 h-4 text-amber-500" />
+              <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200">
+                {isEn ? 'Player Selected by Majority Vote' : 'ভোটের মাধ্যমে অভিযুক্ত খেলোয়াড়'}
+              </h3>
+            </div>
           </div>
 
           {eliminatedPlayer ? (
-            <div className="space-y-2">
-              <div className="text-5xl">{eliminatedPlayer.avatar || '🕵️'}</div>
-              <div className="text-xl font-black text-slate-900 dark:text-white">
-                {eliminatedPlayer.name}
-              </div>
-              <div className="text-xs text-slate-500">
-                {isEn ? eliminatedPlayer.titleEn : eliminatedPlayer.titleBn}
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-3xl shrink-0">{eliminatedPlayer.avatar || '🕵️'}</span>
+                <div>
+                  <div className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+                    {eliminatedPlayer.name}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {isEn ? eliminatedPlayer.titleEn : eliminatedPlayer.titleBn}
+                  </div>
+                </div>
               </div>
 
-              <div className="pt-2">
+              <div>
                 {isEliminatedImposter ? (
-                  <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-black bg-rose-500 text-white shadow-md">
-                    <UserX className="w-4 h-4" />
-                    <span>{isEn ? 'WAS THE IMPOSTER!' : 'ধাপ্পাবাজ প্রমাণিত!'}</span>
+                  <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black bg-emerald-500 text-slate-950 shadow-md">
+                    <CheckCircle className="w-4 h-4 text-slate-950" />
+                    <span>{isEn ? '✓ Correct! Dhappabaj Caught' : '✓ সঠিক! ধাপ্পাবাজ ধরা পড়েছে'}</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-black bg-amber-500 text-slate-950 shadow-md">
-                    <CheckCircle className="w-4 h-4" />
-                    <span>{isEn ? 'WAS AN INNOCENT CITIZEN!' : 'একজন নির্দোষ নাগরিক ছিলেন!'}</span>
+                  <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black bg-rose-500 text-white shadow-md">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>{isEn ? '✗ False Accusation! Was Innocent' : '✗ ভুল অভিযোগ! নির্দোষ নাগরিক ছিলেন'}</span>
                   </span>
                 )}
               </div>
             </div>
           ) : (
-            <div className="py-2 text-sm font-bold text-slate-500">
-              {isEn ? 'Vote was tied! Nobody was eliminated.' : 'ভোট সমান হওয়ায় কাউকে বহিষ্কার করা হয়নি।'}
+            <div className="py-2 text-center text-xs font-bold text-slate-500">
+              {isEn
+                ? 'Vote was tied! Nobody received a clear majority.'
+                : 'ভোট সমান হওয়ায় কোনো একক খেলোয়াড়কে নির্বাচন করা হয়নি।'}
             </div>
           )}
 
           {/* Secret Word Revealed */}
           {room.revealedWord && (
-            <div className="mt-3 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-center space-y-0.5">
+            <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-center space-y-0.5">
               <div className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
-                {isEn ? 'Secret Word' : 'আসল গোপন শব্দ'}
+                {isEn ? 'Secret Word for the Round' : 'এই রাউন্ডের আসল গোপন শব্দ'}
               </div>
               <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
                 {room.revealedWord.wordBn}
@@ -129,21 +212,21 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
 
           {/* Imposter guess result if applicable */}
           {room.imposterGuessedWord !== undefined && room.imposterGuessAnswer && (
-            <div className="mt-2 p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs">
-              <span className="font-bold">
+            <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-center sm:text-left">
+              <span className="font-bold text-slate-600 dark:text-slate-400">
                 {isEn ? 'Imposter Guess: ' : 'ধাপ্পাবাজের অনুমান: '}
               </span>
               <span className="font-bold text-amber-500">"{room.imposterGuessAnswer}"</span>
               <span className="ml-2 font-bold">
                 {room.imposterGuessedWord
-                  ? isEn ? '✓ Correct! Stole the win!' : '✓ সঠিক! জয় ছিনিয়ে নিল!'
+                  ? isEn ? '✓ Correct! Stole the victory!' : '✓ সঠিক শব্দ অনুমান করে জয় ছিনিয়ে নিয়েছে!'
                   : isEn ? '✗ Wrong guess!' : '✗ ভুল অনুমান!'}
               </span>
             </div>
           )}
         </div>
 
-        {/* Detailed Points Breakdown Section */}
+        {/* Detailed Points Breakdown Section (Requirement 7) */}
         <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
@@ -158,10 +241,10 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
           </div>
 
           {room.scoreDetails && room.scoreDetails.length > 0 ? (
-            <div className="space-y-2.5 max-h-[36vh] overflow-y-auto p-1">
+            <div className="space-y-2.5 max-h-[34vh] overflow-y-auto p-1">
               {room.scoreDetails.map((detail) => {
                 const isMe = detail.playerId === currentPlayer.id;
-                const isImposterRole = imposterIds.includes(detail.playerId);
+                const isImp = imposterIds.includes(detail.playerId);
                 const votedSuspect = players.find((p) => p.id === detail.votedForId);
 
                 return (
@@ -181,8 +264,8 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
                             {detail.playerName} {isMe && (isEn ? '(You)' : '(আপনি)')}
                           </span>
                           <span className="text-[10px] text-slate-400">
-                            {isImposterRole
-                              ? isEn ? '🕵️ Imposter' : '🕵️ ধাপ্পাবাজ'
+                            {isImp
+                              ? isEn ? '🕵️ Dhappabaj' : '🕵️ ধাপ্পাবাজ'
                               : isEn ? '🛡️ Citizen' : '🛡️ নাগরিক'}
                           </span>
                         </div>
@@ -190,7 +273,7 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
 
                       {/* Points Delta Badge */}
                       <div
-                        className={`px-3 py-1 rounded-xl font-mono text-sm font-black ${
+                        className={`px-3 py-1 rounded-xl font-mono text-xs sm:text-sm font-black ${
                           detail.pointsDelta > 0
                             ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
                             : detail.pointsDelta < 0
@@ -223,7 +306,7 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
                       )}
 
                       {/* Vote details */}
-                      <div className="text-[10px] text-slate-400 pt-0.5 flex items-center gap-2">
+                      <div className="text-[10px] text-slate-400 pt-0.5 flex items-center gap-2 flex-wrap">
                         {votedSuspect && (
                           <span>
                             {isEn ? 'Voted for: ' : 'ভোট দিয়েছেন: '}
@@ -249,23 +332,30 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
-        {isHost ? (
-          <button
-            type="button"
-            onClick={handleProceedToScoreboard}
-            className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-base shadow-xl shadow-amber-500/25 flex items-center justify-center gap-2 cursor-pointer transition-all"
-          >
-            <Award className="w-5 h-5" />
-            <span>{isEn ? 'View Match Leaderboard' : 'ম্যাচের সামগ্রিক লিডারবোর্ড দেখুন'}</span>
-            <ArrowRight className="w-5 h-5" />
-          </button>
-        ) : (
-          <div className="text-center text-xs text-slate-500 dark:text-slate-400 py-2">
-            {isEn ? 'Waiting for host to proceed to leaderboard...' : 'হোস্ট লিডারবোর্ডে যাওয়ার জন্য অপেক্ষা করুন...'}
-          </div>
-        )}
+      {/* Footer Navigation */}
+      <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
+        <button
+          type="button"
+          onClick={handleProceedToScoreboard}
+          className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-base shadow-xl shadow-amber-500/25 flex items-center justify-center gap-2 cursor-pointer transition-all"
+        >
+          <Award className="w-5 h-5" />
+          <span>
+            {isEn
+              ? `View Match Leaderboard (${autoTimer}s)`
+              : `ম্যাচের লিডারবোর্ড দেখুন (${autoTimer}s)`}
+          </span>
+          <ArrowRight className="w-5 h-5" />
+        </button>
+
+        <div className="text-center text-[11px] text-slate-400 flex items-center justify-center gap-1">
+          <Clock className="w-3 h-3" />
+          <span>
+            {isEn
+              ? `Automatically advancing to Leaderboard in ${autoTimer}s`
+              : `${autoTimer} সেকেন্ড পর স্বয়ংক্রিয়ভাবে লিডারবোর্ডে নিয়ে যাওয়া হবে`}
+          </span>
+        </div>
       </div>
     </div>
   );

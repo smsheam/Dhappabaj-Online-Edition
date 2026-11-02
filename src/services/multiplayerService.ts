@@ -818,6 +818,15 @@ export async function startOnlineRound(roomCode: string, roundNumber: number = 1
     batch.delete(mDoc.ref);
   });
 
+  // Rotating starting player sequence by round:
+  // 1st round -> 1st player, 2nd round -> 2nd player, 3rd round -> 3rd player, etc.
+  const sortedPlayers = [...players].sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
+  const startIndex = (roundNumber - 1) % sortedPlayers.length;
+  const clueOrder: string[] = [];
+  for (let i = 0; i < sortedPlayers.length; i++) {
+    clueOrder.push(sortedPlayers[(startIndex + i) % sortedPlayers.length].id);
+  }
+
   const now = Date.now();
 
   // Update room status and state
@@ -826,7 +835,10 @@ export async function startOnlineRound(roomCode: string, roundNumber: number = 1
     currentPhase: 'ROLE_REVEAL',
     currentRound: roundNumber,
     currentWordCategory: word.category,
-    phaseEndsAt: null,
+    phaseEndsAt: now + 45000, // 45s role reveal auto-countdown
+    clueOrder,
+    clueTurnPlayerId: clueOrder[0] || null,
+    clueTurnIndex: 0,
     usedWordIds: [...prevUsedIds, word.id],
     winner: null,
     eliminatedPlayerId: null,
@@ -851,21 +863,36 @@ export async function setOnlineRoomPhase(
 ) {
   const roomRef = doc(db, 'rooms', roomCode);
   const now = Date.now();
-  const phaseEndsAt = durationSeconds > 0 ? now + durationSeconds * 1000 : null;
 
   try {
-    await updateDoc(roomRef, {
+    const roomSnap = await safeGetDoc(roomRef);
+    const updates: Record<string, any> = {
       currentPhase: phase,
-      phaseEndsAt,
       lastActivityAt: now,
       updatedAt: now,
-    });
+    };
+
+    let phaseEndsAt = durationSeconds > 0 ? now + durationSeconds * 1000 : null;
+
+    if (roomSnap.exists()) {
+      const roomData = roomSnap.data() as OnlineRoomData;
+      if (phase === 'CLUE') {
+        const clueOrder = roomData.clueOrder || [];
+        const clueTimer = durationSeconds > 0 ? durationSeconds : (roomData.settings.clueTimer || 30);
+        phaseEndsAt = now + clueTimer * 1000;
+        updates.clueTurnIndex = 0;
+        updates.clueTurnPlayerId = clueOrder[0] || null;
+      }
+    }
+
+    updates.phaseEndsAt = phaseEndsAt;
+    await updateDoc(roomRef, updates);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `rooms/${roomCode}`);
   }
 }
 
-// Submit a clue
+// Submit a clue (Turn-based sequential clue round)
 export async function submitOnlineClue(roomCode: string, clueText: string) {
   const user = auth.currentUser;
   if (!user) return;
@@ -875,13 +902,104 @@ export async function submitOnlineClue(roomCode: string, clueText: string) {
   const now = Date.now();
 
   try {
+    const roomSnap = await safeGetDoc(roomRef);
+    if (!roomSnap.exists()) return;
+    const roomData = roomSnap.data() as OnlineRoomData;
+
+    // Save current player's clue
     await updateDoc(playerRef, {
-      clue: clueText.trim().slice(0, 80),
+      clue: clueText.trim().slice(0, 80) || '(নীরব)',
       lastSeenAt: now,
     });
-    await updateDoc(roomRef, { lastActivityAt: now });
+
+    const clueOrder = roomData.clueOrder || [];
+    const currentIndex = roomData.clueTurnIndex ?? 0;
+    const nextIndex = currentIndex + 1;
+    const clueTimer = (roomData.settings.clueTimer || 30) * 1000;
+
+    if (nextIndex < clueOrder.length) {
+      // Advance to next player in sequence
+      await updateDoc(roomRef, {
+        clueTurnIndex: nextIndex,
+        clueTurnPlayerId: clueOrder[nextIndex],
+        phaseEndsAt: now + clueTimer,
+        lastActivityAt: now,
+        updatedAt: now,
+      });
+    } else {
+      // All players in sequence have submitted their clues!
+      // Automatically advance to DISCUSSION!
+      const discussionTimer = (roomData.settings.discussionTimer || 90) * 1000;
+      await updateDoc(roomRef, {
+        currentPhase: 'DISCUSSION',
+        clueTurnPlayerId: null,
+        clueTurnIndex: clueOrder.length,
+        phaseEndsAt: now + discussionTimer,
+        lastActivityAt: now,
+        updatedAt: now,
+      });
+    }
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, `rooms/${roomCode}/players/${user.uid}`);
+    handleFirestoreError(error, OperationType.UPDATE, `rooms/${roomCode}`);
+  }
+}
+
+// Advance clue turn when timer runs out or player skips
+export async function advanceOnlineClueTurn(roomCode: string, timedOutPlayerId?: string) {
+  const roomRef = doc(db, 'rooms', roomCode);
+  const now = Date.now();
+
+  try {
+    const roomSnap = await safeGetDoc(roomRef);
+    if (!roomSnap.exists()) return;
+    const roomData = roomSnap.data() as OnlineRoomData;
+
+    if (roomData.currentPhase !== 'CLUE') return;
+    if (timedOutPlayerId && roomData.clueTurnPlayerId !== timedOutPlayerId) {
+      // Another client already advanced the turn
+      return;
+    }
+
+    const currentTurnId = roomData.clueTurnPlayerId;
+    if (currentTurnId) {
+      // Check if player had submitted a clue, if not mark as timed out
+      const pRef = doc(db, 'rooms', roomCode, 'players', currentTurnId);
+      const pSnap = await safeGetDoc(pRef);
+      if (pSnap.exists() && !(pSnap.data() as OnlinePlayer).clue) {
+        await updateDoc(pRef, {
+          clue: '(সময় শেষ)',
+          lastSeenAt: now,
+        });
+      }
+    }
+
+    const clueOrder = roomData.clueOrder || [];
+    const currentIndex = roomData.clueTurnIndex ?? 0;
+    const nextIndex = currentIndex + 1;
+    const clueTimer = (roomData.settings.clueTimer || 30) * 1000;
+
+    if (nextIndex < clueOrder.length) {
+      await updateDoc(roomRef, {
+        clueTurnIndex: nextIndex,
+        clueTurnPlayerId: clueOrder[nextIndex],
+        phaseEndsAt: now + clueTimer,
+        lastActivityAt: now,
+        updatedAt: now,
+      });
+    } else {
+      // All players completed clue stage, proceed to DISCUSSION automatically
+      const discussionTimer = (roomData.settings.discussionTimer || 90) * 1000;
+      await updateDoc(roomRef, {
+        currentPhase: 'DISCUSSION',
+        clueTurnPlayerId: null,
+        clueTurnIndex: clueOrder.length,
+        phaseEndsAt: now + discussionTimer,
+        lastActivityAt: now,
+        updatedAt: now,
+      });
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `rooms/${roomCode}`);
   }
 }
 
@@ -923,6 +1041,9 @@ export async function resolveOnlineVotingResults(roomCode: string) {
   if (!roomSnap.exists()) return;
 
   const roomData = roomSnap.data() as OnlineRoomData;
+  // Guard against concurrent executions from multiple clients
+  if (roomData.currentPhase !== 'VOTING') return;
+
   const playersSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'players'));
   const players = playersSnap.docs.map((d) => d.data() as OnlinePlayer);
 
@@ -1027,6 +1148,8 @@ export async function submitOnlineImposterGuess(
   if (!roomSnap.exists()) return;
 
   const roomData = roomSnap.data() as OnlineRoomData;
+  if (roomData.currentPhase !== 'IMPOSTER_GUESS') return;
+
   const secretWord = roomData.revealedWord;
   if (!secretWord) return;
 
@@ -1037,19 +1160,36 @@ export async function submitOnlineImposterGuess(
   const isCorrect = cleanGuess === wordBnClean || cleanGuess === wordEnClean;
   const now = Date.now();
 
-  // If correct, Imposter steals the win! Update scores
+  // If correct, Imposter steals the win! Update scores safely
   const batch = writeBatch(db);
-  if (isCorrect && roomData.scoreDetails) {
+  const updatedScoreDetails = [...(roomData.scoreDetails || [])];
+
+  if (isCorrect) {
     const imposterIds = roomData.revealedImposterIds || [];
-    imposterIds.forEach((impId) => {
+    for (const impId of imposterIds) {
       const pRef = doc(db, 'rooms', roomCode, 'players', impId);
-      const existingDetail = roomData.scoreDetails?.find((d) => d.playerId === impId);
-      if (existingDetail) {
+      const pSnap = await safeGetDoc(pRef);
+      if (pSnap.exists()) {
+        const curScore = (pSnap.data() as OnlinePlayer).score || 0;
+        // Fix: Add 3 bonus points to current total accumulated score!
         batch.update(pRef, {
-          score: (existingDetail.votesReceived || 0) + 3,
+          score: curScore + 3,
         });
       }
-    });
+
+      // Update breakdown details
+      const detailIndex = updatedScoreDetails.findIndex((d) => d.playerId === impId);
+      if (detailIndex !== -1) {
+        updatedScoreDetails[detailIndex] = {
+          ...updatedScoreDetails[detailIndex],
+          pointsDelta: updatedScoreDetails[detailIndex].pointsDelta + 3,
+          reasons: [
+            ...updatedScoreDetails[detailIndex].reasons,
+            { bn: 'সঠিক শব্দ অনুমান বোনাস (+৩)', en: 'Guessed secret word bonus (+3)' },
+          ],
+        };
+      }
+    }
   }
 
   batch.update(roomRef, {
@@ -1057,6 +1197,7 @@ export async function submitOnlineImposterGuess(
     imposterGuessedWord: isCorrect,
     imposterGuessAnswer: guess.trim(),
     winner: isCorrect ? 'imposter' : 'innocents',
+    scoreDetails: sanitizeForFirestore(updatedScoreDetails),
     phaseEndsAt: null,
     lastActivityAt: now,
     updatedAt: now,

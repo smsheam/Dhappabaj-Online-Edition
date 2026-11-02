@@ -47,14 +47,28 @@ export const OnlineVotingScreen: React.FC<OnlineVotingScreenProps> = ({
         sound.playTimerTick();
       }
 
-      if (remaining === 0 && isHost && !resolving) {
+      // Automatically resolve results on timeout!
+      if (remaining === 0 && !resolving) {
         clearInterval(interval);
         handleResolveResults();
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [room.phaseEndsAt, isHost, resolving]);
+  }, [room.phaseEndsAt, resolving]);
+
+  const votedCount = players.filter((p) => p.hasVoted).length;
+  const allVoted = votedCount === players.length && players.length > 0;
+
+  // Requirement 3 & 4: Automatically resolve voting when all players have voted!
+  useEffect(() => {
+    if (allVoted && !resolving) {
+      const timer = setTimeout(() => {
+        handleResolveResults();
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [allVoted, resolving]);
 
   const handleCastVote = async () => {
     if (!selectedSuspectId) return;
@@ -80,9 +94,6 @@ export const OnlineVotingScreen: React.FC<OnlineVotingScreenProps> = ({
       setResolving(false);
     }
   };
-
-  const votedCount = players.filter((p) => p.hasVoted).length;
-  const allVoted = votedCount === players.length && players.length > 0;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between p-4 sm:p-8 max-w-3xl mx-auto transition-colors duration-200">

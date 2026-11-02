@@ -19,6 +19,7 @@ import { preloadWordImage } from './utils/wordImageService';
 import { OnlinePlayer, OnlineRoomData } from './types/multiplayer';
 import { OnlineJoinCreateModal } from './components/online/OnlineJoinCreateModal';
 import { OnlineGameContainer } from './components/online/OnlineGameContainer';
+import { Analytics } from '@vercel/analytics/react';
 
 const AVATAR_COLORS = [
   'bg-rose-500',
@@ -490,6 +491,7 @@ export default function App() {
       )}
     </>
   )}
+  <Analytics />
 </div>
   );
 }

@@ -1,8 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Send, CheckCircle2, Clock, ArrowRight } from 'lucide-react';
+import {
+  MessageSquare,
+  Send,
+  CheckCircle2,
+  Clock,
+  Sparkles,
+  User,
+  Zap,
+  Lock,
+} from 'lucide-react';
 import { Language, Theme } from '../../types/game';
 import { OnlinePlayer, OnlineRoomData, PrivatePlayerRole } from '../../types/multiplayer';
-import { submitOnlineClue, setOnlineRoomPhase } from '../../services/multiplayerService';
+import { submitOnlineClue, advanceOnlineClueTurn } from '../../services/multiplayerService';
 import { sound } from '../../utils/audio';
 
 interface OnlineClueScreenProps {
@@ -22,12 +31,22 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
   lang,
 }) => {
   const isEn = lang === 'en';
-  const isHost = currentPlayer.isHost;
-  const [clueInput, setClueInput] = useState<string>(currentPlayer.clue || '');
-  const [isSubmitted, setIsSubmitted] = useState<boolean>(!!currentPlayer.clue);
+  const [clueInput, setClueInput] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const [hasTimedOut, setHasTimedOut] = useState<boolean>(false);
 
-  // Synchronized countdown timer
+  // Turn-based ordering:
+  // clueOrder contains the rotated sequence of player IDs for this round
+  const clueOrder = room.clueOrder && room.clueOrder.length > 0
+    ? room.clueOrder
+    : players.map((p) => p.id);
+
+  const currentTurnIndex = room.clueTurnIndex ?? 0;
+  const currentTurnPlayerId = room.clueTurnPlayerId || clueOrder[currentTurnIndex] || null;
+  const isMyTurn = currentTurnPlayerId === currentPlayer.id;
+  const currentTurnPlayer = players.find((p) => p.id === currentTurnPlayerId);
+
+  // Synchronized countdown timer for the current player's turn (default 30s)
   const clueDuration = room.settings.clueTimer || 30;
   const [timeLeft, setTimeLeft] = useState<number>(() => {
     if (!room.phaseEndsAt) return clueDuration;
@@ -45,23 +64,30 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
         sound.playTimerTick();
       }
 
-      if (remaining === 0 && isHost) {
-        clearInterval(interval);
-        handleProceedToDiscussion();
+      // If time expires for current turn: automatically advance!
+      if (remaining === 0 && !hasTimedOut) {
+        setHasTimedOut(true);
+        advanceOnlineClueTurn(room.roomCode, currentTurnPlayerId || undefined);
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [room.phaseEndsAt, isHost]);
+  }, [room.phaseEndsAt, currentTurnPlayerId, hasTimedOut, room.roomCode]);
+
+  // Reset timeout guard when active turn changes
+  useEffect(() => {
+    setHasTimedOut(false);
+  }, [currentTurnPlayerId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clueInput.trim()) return;
+    if (!clueInput.trim() || submitting || !isMyTurn) return;
+
     setSubmitting(true);
     sound.playClick();
     try {
-      await submitOnlineClue(room.roomCode, clueInput);
-      setIsSubmitted(true);
+      await submitOnlineClue(room.roomCode, clueInput.trim());
+      setClueInput('');
     } catch (err) {
       console.error(err);
     } finally {
@@ -69,140 +95,222 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
     }
   };
 
-  const handleProceedToDiscussion = async () => {
-    sound.playClick();
-    const discussionTime = room.settings.discussionTimer || 90;
-    await setOnlineRoomPhase(room.roomCode, 'DISCUSSION', discussionTime);
-  };
-
-  const submittedCount = players.filter((p) => !!p.clue).length;
-  const allCluesIn = submittedCount === players.length && players.length > 0;
+  // Build sequential list of players in the order they give clues
+  const orderedPlayers = clueOrder.map((id) => players.find((p) => p.id === id)).filter(Boolean) as OnlinePlayer[];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between p-4 sm:p-8 max-w-2xl mx-auto transition-colors duration-200">
-      {/* Top Header with Timer */}
-      <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
-            <MessageSquare className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
-              {isEn ? 'Stage 1: Give Your Clue' : '১ম ধাপ: আপনার ক্লু দিন'}
-            </h2>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              {isEn ? 'Enter 1-2 words hint' : '১-২ শব্দের ইঙ্গিত লিখুন'}
-            </p>
-          </div>
-        </div>
-
-        {/* Synchronized Clue Timer */}
-        <div
-          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-2xl font-mono text-lg font-black border transition-all ${
-            timeLeft <= 5
-              ? 'bg-rose-500/20 border-rose-500 text-rose-600 dark:text-rose-400 animate-pulse'
-              : 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400'
-          }`}
-        >
-          <Clock className="w-4 h-4" />
-          <span>{timeLeft}s</span>
-        </div>
-      </div>
-
-      {/* Clue Input Form */}
-      <div className="my-5 space-y-5">
-        <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-              {isEn ? 'Your Clue' : 'আপনার ক্লু'}
-            </label>
-            {isSubmitted && (
-              <span className="text-xs font-bold text-emerald-500 flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>{isEn ? 'Clue Saved' : 'ক্লু জমা হয়েছে'}</span>
-              </span>
-            )}
-          </div>
-
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <input
-              type="text"
-              value={clueInput}
-              onChange={(e) => {
-                setClueInput(e.target.value);
-                if (isSubmitted) setIsSubmitted(false);
-              }}
-              maxLength={40}
-              placeholder={isEn ? 'e.g. Yellow, Sweet, Morning...' : 'যেমন: মিষ্টি, গোল, সকাল...'}
-              className="flex-1 px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm font-semibold focus:outline-none focus:border-amber-500"
-            />
-            <button
-              type="submit"
-              disabled={submitting || !clueInput.trim()}
-              className="px-6 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            >
-              <Send className="w-4 h-4" />
-              <span>{isEn ? 'Submit' : 'জমা দিন'}</span>
-            </button>
-          </form>
-
-          {/* Quick role reminder */}
-          <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200/60 dark:border-slate-800 text-[11px] text-center">
-            {privateRole?.role === 'imposter' ? (
-              <span className="text-rose-500 font-bold">
-                🕵️ {isEn ? 'Imposter Hint: ' : 'ধাপ্পাবাজ ইঙ্গিত: '}
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between p-3.5 sm:p-6 max-w-2xl mx-auto transition-colors duration-200">
+      {/* Top Header with Sequential Turn Status & Timer */}
+      <div className="space-y-3">
+        <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+              <MessageSquare className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+                {isEn ? 'Stage 1: Sequential Clues (One by One)' : '১ম ধাপ: এক এক করে ক্লু প্রদান'}
+              </h2>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
                 {isEn
-                  ? privateRole.shortHintEn || privateRole.hintEn || 'Blend in smoothly'
-                  : privateRole.shortHintBn || privateRole.hintBn || 'সবার সাথে মিশে যান'}
-              </span>
-            ) : (
-              <span className="text-amber-600 dark:text-amber-400 font-bold">
-                🛡️ {isEn ? `Secret Word: "${privateRole?.wordBn} (${privateRole?.wordEn})"` : `আসল শব্দ: "${privateRole?.wordBn}"`}
-              </span>
-            )}
+                  ? 'Each player submits clue in turn. Everyone can see previous clues!'
+                  : 'প্রত্যেকে ক্রমানুসারে ক্লু দেবেন। পূর্ববর্তী সবার ক্লু দেখে নেওয়া যাবে!'}
+              </p>
+            </div>
+          </div>
+
+          {/* Turn Timer */}
+          <div
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-2xl font-mono text-lg font-black border transition-all ${
+              timeLeft <= 5
+                ? 'bg-rose-500/20 border-rose-500 text-rose-600 dark:text-rose-400 animate-pulse'
+                : 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400'
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            <span>{timeLeft}s</span>
           </div>
         </div>
 
-        {/* Live Clue Submissions Feed */}
-        <div className="space-y-2.5">
-          <div className="flex items-center justify-between px-1">
-            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-              {isEn ? 'Clues Submitted So Far' : 'জমা হওয়া ক্লুসমূহ'}
+        {/* Turn Progress Tracker */}
+        <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center justify-between text-xs font-bold mb-2">
+            <span className="text-slate-700 dark:text-slate-300">
+              {isEn ? 'Clue Turn Order' : 'ক্লু দেওয়ার পর্যায়ক্রম'}
             </span>
-            <span className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400">
-              {submittedCount} / {players.length}
+            <span className="font-mono text-amber-500">
+              {Math.min(currentTurnIndex + 1, orderedPlayers.length)} / {orderedPlayers.length}
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[35vh] overflow-y-auto p-1">
-            {players.map((p) => {
-              const hasClue = !!p.clue;
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            {orderedPlayers.map((p, idx) => {
+              const isCurrent = p.id === currentTurnPlayerId;
+              const isDone = !!p.clue;
               const isMe = p.id === currentPlayer.id;
+
               return (
                 <div
                   key={p.id}
-                  className={`p-3 rounded-2xl border flex items-center justify-between gap-3 ${
-                    hasClue
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs shrink-0 transition-all ${
+                    isCurrent
+                      ? 'bg-amber-500 text-slate-950 font-black border-amber-500 shadow-md ring-2 ring-amber-400/50'
+                      : isDone
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-bold'
+                      : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-800 text-slate-400'
+                  }`}
+                >
+                  <span className="font-mono text-[10px]">{idx + 1}.</span>
+                  <span>{p.avatar || '🕵️'}</span>
+                  <span className="truncate max-w-[80px]">
+                    {p.name} {isMe && '*'}
+                  </span>
+                  {isDone && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
+                  {isCurrent && <Clock className="w-3.5 h-3.5 animate-spin shrink-0" />}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area: Active Turn Box & Prior Clues */}
+      <div className="my-3 space-y-3.5">
+        {/* Active Turn Interactive Box */}
+        {isMyTurn ? (
+          <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-2 border-amber-500 shadow-lg space-y-3 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-black text-sm">
+                <Sparkles className="w-4 h-4" />
+                <span>{isEn ? 'IT IS YOUR TURN NOW!' : 'এখন আপনার ক্লু দেওয়ার পালা!'}</span>
+              </div>
+              <span className="text-xs font-mono font-bold bg-amber-500 text-slate-950 px-2.5 py-0.5 rounded-full">
+                {timeLeft}s বাকি
+              </span>
+            </div>
+
+            <form onSubmit={handleSubmit} className="flex gap-2">
+              <input
+                type="text"
+                autoFocus
+                value={clueInput}
+                onChange={(e) => setClueInput(e.target.value)}
+                maxLength={45}
+                placeholder={isEn ? 'Type your 1-2 words clue...' : '১-২ শব্দের ক্লু লিখুন...'}
+                className="flex-1 px-4 py-3 rounded-2xl bg-white dark:bg-slate-900 border-2 border-amber-500/50 text-sm font-bold focus:outline-none focus:border-amber-500 text-slate-900 dark:text-white"
+              />
+              <button
+                type="submit"
+                disabled={submitting || !clueInput.trim()}
+                className="px-6 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
+              >
+                <Send className="w-4 h-4" />
+                <span>{isEn ? 'Submit' : 'জমা দিন'}</span>
+              </button>
+            </form>
+
+            {/* Secret Identity Reminder for Active Player */}
+            <div className="p-2.5 rounded-xl bg-white/70 dark:bg-slate-900/80 border border-amber-500/30 text-xs">
+              {privateRole?.role === 'imposter' ? (
+                <div className="text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1.5">
+                  <span>🕵️</span>
+                  <span>{isEn ? 'Imposter Hint: ' : 'ধাপ্পাবাজ ইঙ্গিত: '}</span>
+                  <span className="underline">
+                    {privateRole.shortHintBn || privateRole.hintBn || 'ক্যাটাগরি সম্পর্কিত'}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    ({isEn ? 'Blend in with others' : 'অন্যদের ক্লু লক্ষ্য করে মিল রাখুন'})
+                  </span>
+                </div>
+              ) : (
+                <div className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1.5">
+                  <span>🛡️</span>
+                  <span>{isEn ? 'Secret Word: ' : 'আপনার আসল গোপন শব্দ: '}</span>
+                  <span className="text-amber-500 font-black text-sm underline">
+                    {privateRole?.wordBn}
+                  </span>
+                  <span className="text-slate-400">({privateRole?.wordEn})</span>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* Waiting for other player's turn */
+          <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm text-center space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+              <Clock className="w-3.5 h-3.5 animate-spin" />
+              <span>
+                {isEn
+                  ? `Waiting for ${currentTurnPlayer?.name || 'Player'} to submit clue...`
+                  : `এখন ${currentTurnPlayer?.name || 'খেলোয়াড়'}-এর পালা... অপেক্ষা করুন`}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {isEn
+                ? 'Review clues given by previous players below before your turn arrives!'
+                : 'আপনার পালার পূর্বে নিচের আগের খেলোয়াড়দের ক্লুগুলো দেখে রাখুন!'}
+            </p>
+          </div>
+        )}
+
+        {/* Live Sequential Clues Feed (Visible to all, one by one) */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between px-1 text-xs font-bold text-slate-700 dark:text-slate-300">
+            <span className="flex items-center gap-1.5">
+              <MessageSquare className="w-3.5 h-3.5 text-amber-500" />
+              <span>{isEn ? 'Chronological Clues Feed' : 'ধারাবাহিক ক্লু তালিকা'}</span>
+            </span>
+            <span className="text-[11px] text-slate-400">
+              {orderedPlayers.filter((p) => !!p.clue).length} / {orderedPlayers.length} {isEn ? 'Done' : 'সম্পন্ন'}
+            </span>
+          </div>
+
+          <div className="space-y-2 max-h-[42vh] overflow-y-auto p-1">
+            {orderedPlayers.map((p, idx) => {
+              const hasClue = !!p.clue;
+              const isCurrent = p.id === currentTurnPlayerId;
+              const isMe = p.id === currentPlayer.id;
+
+              return (
+                <div
+                  key={p.id}
+                  className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                    isCurrent
+                      ? 'bg-amber-500/10 border-amber-500 shadow-sm ring-1 ring-amber-400/30'
+                      : hasClue
                       ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
-                      : 'bg-slate-100/50 dark:bg-slate-900/40 border-dashed border-slate-300 dark:border-slate-800 opacity-60'
+                      : 'bg-slate-100/50 dark:bg-slate-900/30 border-dashed border-slate-200 dark:border-slate-800 opacity-60'
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="text-xl">{p.avatar || '🕵️'}</span>
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
-                      {p.name} {isMe && (isEn ? '(You)' : '(আপনি)')}
+                    <span className="font-mono text-xs font-bold text-slate-400 w-4">
+                      {idx + 1}.
                     </span>
+                    <span className="text-xl shrink-0">{p.avatar || '🕵️'}</span>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                        {p.name} {isMe && (isEn ? '(You)' : '(আপনি)')}
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        {isEn ? p.titleEn : p.titleBn}
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     {hasClue ? (
-                      <span className="px-2.5 py-1 rounded-xl text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300">
+                      <span className="px-3 py-1 rounded-xl text-xs sm:text-sm font-black bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300">
                         "{p.clue}"
+                      </span>
+                    ) : isCurrent ? (
+                      <span className="px-2.5 py-1 rounded-xl text-xs font-bold text-amber-500 flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 animate-spin" />
+                        <span>{isEn ? 'Thinking...' : 'লিখছেন...'}</span>
                       </span>
                     ) : (
                       <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                        <Clock className="w-3 h-3 animate-spin" />
-                        <span>{isEn ? 'Thinking...' : 'লিখছেন...'}</span>
+                        <Lock className="w-3 h-3 text-slate-400" />
+                        <span>{isEn ? 'Waiting turn' : 'অপেক্ষমাণ'}</span>
                       </span>
                     )}
                   </div>
@@ -213,36 +321,16 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
         </div>
       </div>
 
-      {/* Host Controls */}
-      <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
-        {isHost ? (
-          <button
-            type="button"
-            onClick={handleProceedToDiscussion}
-            className={`w-full py-4 px-6 rounded-2xl font-black text-base flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg ${
-              allCluesIn
-                ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 shadow-amber-500/25 ring-2 ring-amber-400/50'
-                : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700'
-            }`}
-          >
-            <span>
-              {allCluesIn
-                ? isEn
-                  ? 'All Clues In! Proceed to Discussion'
-                  : 'সব ক্লু জমা হয়েছে! আলোচনায় চলুন'
-                : isEn
-                ? `Proceed to Discussion (${submittedCount}/${players.length})`
-                : `আলোচনায় এগিয়ে চলুন (${submittedCount}/${players.length})`}
-            </span>
-            <ArrowRight className="w-5 h-5" />
-          </button>
-        ) : (
-          <div className="text-center text-xs text-slate-500 dark:text-slate-400 py-2">
+      {/* Auto Progression Notice (No Host Button Needed!) */}
+      <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+        <div className="p-2.5 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1.5">
+          <Zap className="w-3.5 h-3.5 text-amber-500" />
+          <span>
             {isEn
-              ? 'Waiting for host to proceed to discussion stage...'
-              : 'হোস্ট আলোচনার ধাপে নিয়ে যাওয়ার জন্য অপেক্ষা করুন...'}
-          </div>
-        )}
+              ? 'Stage automatically advances to Live Discussion when all players submit clues or time ends'
+              : 'সকল খেলোয়াড়ের ক্লু জমা শেষ হলে বা সময় ফুরিয়ে গেলে স্বয়ংক্রিয়ভাবে সরাসরি আলোচনা পর্ব শুরু হবে'}
+          </span>
+        </div>
       </div>
     </div>
   );

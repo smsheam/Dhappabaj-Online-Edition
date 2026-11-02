@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Eye,
   EyeOff,
@@ -6,10 +6,10 @@ import {
   UserX,
   CheckCircle2,
   Clock,
-  ArrowRight,
   Sparkles,
   Lock,
   Users,
+  Zap,
 } from 'lucide-react';
 import { Language, Theme } from '../../types/game';
 import { OnlinePlayer, OnlineRoomData, PrivatePlayerRole } from '../../types/multiplayer';
@@ -34,12 +34,18 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
   lang,
 }) => {
   const isEn = lang === 'en';
-  const isHost = currentPlayer.isHost;
   const [isRevealed, setIsRevealed] = useState<boolean>(false);
   const [hasAcknowledged, setHasAcknowledged] = useState<boolean>(currentPlayer.hasSeenCard || false);
+  const [autoAdvancing, setAutoAdvancing] = useState<boolean>(false);
 
   const isImposter = privateRole?.role === 'imposter';
   const categoryInfo = privateRole ? CATEGORIES[privateRole.category] : null;
+
+  // Synchronized countdown timer
+  const [timeLeft, setTimeLeft] = useState<number>(() => {
+    if (!room.phaseEndsAt) return 45;
+    return Math.max(0, Math.ceil((room.phaseEndsAt - Date.now()) / 1000));
+  });
 
   const handleFlip = () => {
     sound.playCardFlip();
@@ -52,8 +58,7 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
     await confirmOnlineCardSeen(room.roomCode);
   };
 
-  const handleProceedToClues = async () => {
-    sound.playClick();
+  const proceedToClues = async () => {
     const clueDuration = room.settings.clueTimer || 30;
     await setOnlineRoomPhase(room.roomCode, 'CLUE', clueDuration);
   };
@@ -61,18 +66,54 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
   const confirmedPlayersCount = players.filter((p) => p.hasSeenCard).length;
   const allConfirmed = confirmedPlayersCount === players.length && players.length > 0;
 
+  // Auto-advance timer countdown
+  useEffect(() => {
+    if (!room.phaseEndsAt) return;
+
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((room.phaseEndsAt! - Date.now()) / 1000));
+      setTimeLeft(remaining);
+
+      if (remaining === 0 && !autoAdvancing) {
+        setAutoAdvancing(true);
+        proceedToClues();
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [room.phaseEndsAt, autoAdvancing]);
+
+  // Requirement 3 & 4: Automatically advance to Clue stage when all players confirm their card!
+  useEffect(() => {
+    if (allConfirmed && !autoAdvancing) {
+      setAutoAdvancing(true);
+      const timer = setTimeout(() => {
+        proceedToClues();
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [allConfirmed, autoAdvancing]);
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between p-4 sm:p-8 max-w-2xl mx-auto transition-colors duration-200">
-      {/* Top Banner */}
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between p-3.5 sm:p-6 max-w-2xl mx-auto transition-colors duration-200">
+      {/* Top Header */}
       <div className="text-center space-y-2">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400">
-          <span>{categoryInfo?.icon || '📦'}</span>
-          <span>
-            {isEn
-              ? `Category: ${categoryInfo?.nameEn || 'General'}`
-              : `ক্যাটাগরি: ${categoryInfo?.nameBn || 'সাধারণ'}`}
-          </span>
+        <div className="flex items-center justify-center gap-2">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400">
+            <span>{categoryInfo?.icon || '📦'}</span>
+            <span>
+              {isEn
+                ? `Category: ${categoryInfo?.nameEn || 'General'}`
+                : `ক্যাটাগরি: ${categoryInfo?.nameBn || 'সাধারণ'}`}
+            </span>
+          </div>
+
+          <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+            <Clock className="w-3 h-3 text-amber-500" />
+            <span>{timeLeft}s</span>
+          </div>
         </div>
+
         <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
           {isEn
             ? `Round ${room.currentRound} of ${room.totalRounds}`
@@ -85,52 +126,52 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
         </p>
       </div>
 
-      {/* Secret Identity Flashcard */}
-      <div className="my-auto py-4">
+      {/* Secret Identity Flashcard - Enhanced Visuals & Contrast */}
+      <div className="my-auto py-3">
         <div
           onClick={handleFlip}
           className="relative w-full max-w-sm mx-auto aspect-[3/4] sm:aspect-[4/5] rounded-3xl cursor-pointer select-none transition-all duration-300 transform hover:scale-[1.01] active:scale-[0.99] shadow-2xl"
         >
           {/* Card Body */}
           <div
-            className={`w-full h-full rounded-3xl p-6 sm:p-7 border-2 transition-all duration-500 flex flex-col justify-between items-center text-center relative overflow-hidden ${
+            className={`w-full h-full rounded-3xl p-6 sm:p-7 border-2 transition-all duration-500 flex flex-col justify-between items-center text-center relative overflow-hidden backdrop-blur-md ${
               !isRevealed
-                ? 'bg-gradient-to-br from-slate-900 via-slate-850 to-slate-950 border-amber-500/40 text-white shadow-amber-500/10'
+                ? 'bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 border-amber-500/50 text-white shadow-amber-500/20'
                 : isImposter
-                ? 'bg-gradient-to-br from-rose-950 via-slate-900 to-red-950 border-rose-500/80 text-white shadow-rose-500/20'
-                : 'bg-gradient-to-br from-amber-500/15 via-slate-900 to-slate-950 border-amber-500/80 text-white shadow-amber-500/20'
+                ? 'bg-gradient-to-br from-rose-950 via-slate-900 to-red-950 border-rose-500 text-white shadow-rose-500/30'
+                : 'bg-gradient-to-br from-slate-900 via-slate-850 to-slate-950 border-emerald-500/80 text-white shadow-emerald-500/25'
             }`}
           >
             {/* Top Bar of Flashcard */}
-            <div className="w-full flex items-center justify-between text-xs font-bold tracking-wider uppercase opacity-80">
-              <span className="flex items-center gap-1.5 text-amber-400">
-                <Sparkles className="w-3.5 h-3.5" />
+            <div className="w-full flex items-center justify-between text-xs font-bold tracking-wider uppercase opacity-90">
+              <span className="flex items-center gap-1.5 text-amber-400 font-black">
+                <Sparkles className="w-4 h-4 text-amber-400" />
                 <span>ধাপ্পাবাজ</span>
               </span>
               <span
-                className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wide ${
                   !isRevealed
-                    ? 'bg-slate-800 text-slate-300'
+                    ? 'bg-slate-800 text-slate-300 border border-slate-700'
                     : isImposter
-                    ? 'bg-rose-500 text-white animate-pulse'
-                    : 'bg-amber-500 text-slate-950'
+                    ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/50 animate-pulse'
+                    : 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/50'
                 }`}
               >
-                {!isRevealed ? '🔒 SECRET' : isImposter ? '🕵️ IMPOSTER' : '🛡️ CITIZEN'}
+                {!isRevealed ? '🔒 গোপন কার্ড' : isImposter ? '🕵️ IMPOSTER' : '🛡️ CITIZEN'}
               </span>
             </div>
 
             {/* Center Area */}
             {!isRevealed ? (
               <div className="space-y-4 my-auto">
-                <div className="w-24 h-24 mx-auto rounded-3xl bg-amber-500/20 border-2 border-amber-500/40 flex items-center justify-center text-amber-400 text-4xl shadow-inner">
+                <div className="w-24 h-24 mx-auto rounded-3xl bg-amber-500/20 border-2 border-amber-500/40 flex items-center justify-center text-amber-400 text-4xl shadow-inner shadow-amber-500/20">
                   <Lock className="w-10 h-10" />
                 </div>
                 <div>
                   <h3 className="text-xl font-black text-amber-400">
                     {isEn ? 'Tap to Reveal Secret' : 'গোপন তথ্য দেখতে ট্যাপ করুন'}
                   </h3>
-                  <p className="text-xs text-slate-400 mt-1 max-w-[220px] mx-auto">
+                  <p className="text-xs text-slate-300 mt-1 max-w-[220px] mx-auto font-medium">
                     {isEn
                       ? 'Ensure nobody is looking at your device screen'
                       : 'অন্যরা যেন আপনার স্ক্রিনের দিকে না তাকায় খেয়াল রাখুন'}
@@ -140,28 +181,28 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
             ) : isImposter ? (
               /* Imposter Revealed Flashcard */
               <div className="space-y-4 my-auto w-full animate-in zoom-in-95 duration-200">
-                <div className="w-20 h-20 mx-auto rounded-3xl bg-rose-500/20 border-2 border-rose-500/60 flex items-center justify-center text-rose-400 text-4xl shadow-lg shadow-rose-500/20">
+                <div className="w-20 h-20 mx-auto rounded-3xl bg-rose-500/20 border-2 border-rose-500 flex items-center justify-center text-rose-400 text-4xl shadow-lg shadow-rose-500/30">
                   <UserX className="w-10 h-10 text-rose-500" />
                 </div>
 
-                <div className="space-y-1">
-                  <span className="inline-block px-3.5 py-1 rounded-full text-xs font-black bg-rose-500 text-white shadow-md">
+                <div className="space-y-1.5">
+                  <span className="inline-block px-4 py-1.5 rounded-full text-xs font-black bg-rose-600 text-white shadow-lg tracking-wide">
                     {isEn ? 'YOU ARE THE IMPOSTER!' : 'আপনি ধাপ্পাবাজ!'}
                   </span>
-                  <p className="text-xs text-rose-300 font-medium pt-1">
+                  <p className="text-xs text-rose-200 font-medium pt-1 max-w-xs mx-auto">
                     {isEn
                       ? 'You do NOT know the secret word. Blend in and fool everyone!'
-                      : 'আসল শব্দটি আপনার অজানা। সবাইকে ধোঁকা দিন!'}
+                      : 'আসল শব্দটি আপনার অজানা। সবার সাথে মিশে যান এবং ধোঁকা দিন!'}
                   </p>
                 </div>
 
                 {/* Secret Imposter Clue/Hint */}
-                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-rose-500/40 text-left space-y-1">
-                  <div className="text-[10px] font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1">
+                <div className="p-3.5 rounded-2xl bg-black/60 border border-rose-500/50 text-left space-y-1">
+                  <div className="text-[11px] font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
                     <span>💡</span>
-                    <span>{isEn ? 'Your Secret Hint / Clue' : 'আপনার গোপন ইঙ্গিত'}</span>
+                    <span>{isEn ? 'Your Secret Hint / Clue:' : 'আপনার গোপন ইঙ্গিত:'}</span>
                   </div>
-                  <div className="text-base font-black text-rose-100">
+                  <div className="text-base sm:text-lg font-black text-rose-100">
                     {isEn
                       ? privateRole?.shortHintEn || privateRole?.hintEn || 'Related to this category'
                       : privateRole?.shortHintBn || privateRole?.hintBn || 'ক্যাটাগরি সম্পর্কিত বিষয়'}
@@ -171,23 +212,23 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
             ) : (
               /* Innocent Citizen Revealed Flashcard */
               <div className="space-y-4 my-auto w-full animate-in zoom-in-95 duration-200">
-                <div className="w-20 h-20 mx-auto rounded-3xl bg-amber-500/20 border-2 border-amber-500/60 flex items-center justify-center text-amber-400 text-4xl shadow-lg shadow-amber-500/20">
-                  <ShieldCheck className="w-10 h-10 text-amber-400" />
+                <div className="w-20 h-20 mx-auto rounded-3xl bg-emerald-500/20 border-2 border-emerald-500/60 flex items-center justify-center text-emerald-400 text-4xl shadow-lg shadow-emerald-500/30">
+                  <ShieldCheck className="w-10 h-10 text-emerald-400" />
                 </div>
 
                 <div className="space-y-2">
-                  <span className="inline-block px-3.5 py-1 rounded-full text-xs font-black bg-amber-500 text-slate-950 shadow-md">
+                  <span className="inline-block px-3.5 py-1 rounded-full text-xs font-black bg-emerald-500 text-slate-950 shadow-md">
                     {isEn ? 'YOUR SECRET WORD' : 'আপনার আসল গোপন শব্দ'}
                   </span>
                   <div className="text-4xl sm:text-5xl font-black text-amber-400 tracking-wide pt-1 drop-shadow-md">
                     {privateRole?.wordBn}
                   </div>
-                  <div className="text-sm font-bold text-slate-300">
+                  <div className="text-sm font-bold text-slate-200">
                     {privateRole?.wordEn}
                   </div>
                 </div>
 
-                <div className="p-3 rounded-2xl bg-slate-950/70 border border-amber-500/30 text-amber-200 text-xs font-medium">
+                <div className="p-3 rounded-2xl bg-black/60 border border-emerald-500/40 text-emerald-200 text-xs font-medium">
                   {isEn
                     ? 'Give clever clues without revealing the word directly to the imposter!'
                     : 'চালাক ক্লু দিন যাতে নাগরিকরা বোঝে কিন্তু ধাপ্পাবাজ ধরতে না পারে!'}
@@ -212,17 +253,17 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
         </div>
       </div>
 
-      {/* Confirmation Tracker: Who has viewed the card */}
-      <div className="my-3 p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+      {/* Confirmation Tracker: Live view of who confirmed they saw their word */}
+      <div className="my-2.5 p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-amber-500" />
             <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300">
-              {isEn ? 'Players Word Confirmation' : 'খেলোয়াড়দের প্রস্তুতি অবস্থা'}
+              {isEn ? 'Word Confirmation Tracker' : 'শব্দ নিশ্চিতকরণ ট্র্যাকার'}
             </h4>
           </div>
           <span className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400">
-            {confirmedPlayersCount} / {players.length}
+            {confirmedPlayersCount} / {players.length} {isEn ? 'Confirmed' : 'দেখেছেন'}
           </span>
         </div>
 
@@ -248,9 +289,15 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
                 </div>
                 <div className="shrink-0">
                   {seen ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    <span className="inline-flex items-center gap-0.5 text-emerald-500 font-bold text-[10px]">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>{isEn ? 'Seen' : 'দেখেছেন'}</span>
+                    </span>
                   ) : (
-                    <Clock className="w-3.5 h-3.5 text-slate-400 animate-pulse" />
+                    <span className="inline-flex items-center gap-0.5 text-slate-400 font-medium text-[10px]">
+                      <Clock className="w-3 h-3 animate-spin" />
+                      <span>{isEn ? 'Viewing...' : 'দেখছেন...'}</span>
+                    </span>
                   )}
                 </div>
               </div>
@@ -260,7 +307,7 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
       </div>
 
       {/* Action Footer */}
-      <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
+      <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
         {!hasAcknowledged ? (
           <button
             type="button"
@@ -273,32 +320,27 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
         ) : (
           <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-center text-xs font-bold flex items-center justify-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-            <span>{isEn ? 'You are confirmed! Ready for clues.' : 'আপনার দেখা সম্পন্ন হয়েছে! ক্লুর জন্য প্রস্তুত।'}</span>
-          </div>
-        )}
-
-        {isHost && (
-          <button
-            type="button"
-            onClick={handleProceedToClues}
-            className={`w-full py-4 px-6 rounded-2xl font-black text-base flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg ${
-              allConfirmed
-                ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 text-white shadow-emerald-500/25 ring-2 ring-emerald-400/50'
-                : 'bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 text-white shadow-sky-500/25'
-            }`}
-          >
             <span>
               {allConfirmed
                 ? isEn
-                  ? 'All Ready! Start Clue Stage'
-                  : 'সবাই প্রস্তুত! ক্লু পর্ব শুরু করুন'
+                  ? 'All players ready! Starting clue stage automatically...'
+                  : 'সবাই প্রস্তুত! ক্লু পর্ব স্বয়ংক্রিয়ভাবে শুরু হচ্ছে...'
                 : isEn
-                ? `Proceed to Clues (${confirmedPlayersCount}/${players.length})`
-                : `ক্লু ধাপে নিয়ে চলুন (${confirmedPlayersCount}/${players.length})`}
+                ? 'You are confirmed! Waiting for other players...'
+                : 'আপনার দেখা সম্পন্ন হয়েছে! বাকিদের জন্য অপেক্ষা করুন...'}
             </span>
-            <ArrowRight className="w-5 h-5" />
-          </button>
+          </div>
         )}
+
+        {/* Informational banner about automatic progression */}
+        <div className="text-center text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1">
+          <Zap className="w-3 h-3 text-amber-500" />
+          <span>
+            {isEn
+              ? 'Stage advances automatically when everyone confirms or timer ends'
+              : 'সবাই নিশ্চিত করলে অথবা সময় শেষ হলে স্বয়ংক্রিয়ভাবে পরের ধাপে যাবে'}
+          </span>
+        </div>
       </div>
     </div>
   );

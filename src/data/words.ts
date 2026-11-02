@@ -11,19 +11,94 @@ export const ALL_WORDS: WordItem[] = [
   ...WORDS_ANIMAL,
 ];
 
-// Helper to pick a random word avoiding recently used words in the current match
-export function pickRandomWord(usedWordIds: number[], allowedCategories?: CategoryId[]): WordItem {
-  let pool = ALL_WORDS;
+const GLOBAL_WORD_HISTORY_KEY = 'dhappabaj_global_word_history_v2';
+const MAX_RECENT_HISTORY = 380; // Keep history of up to 380 words so all 480 words rotate through without repetition
+
+function getGlobalHistory(): number[] {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem(GLOBAL_WORD_HISTORY_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    }
+  } catch {
+    // In-memory fallback if storage unavailable
+  }
+  return [];
+}
+
+function recordWordPlayed(wordId: number) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const history = getGlobalHistory();
+      const updated = [wordId, ...history.filter((id) => id !== wordId)].slice(0, MAX_RECENT_HISTORY);
+      localStorage.setItem(GLOBAL_WORD_HISTORY_KEY, JSON.stringify(updated));
+    }
+  } catch {
+    // Storage write failed
+  }
+}
+
+// Cryptographically secure random integer in range [0, max - 1]
+function getSecureRandomIndex(max: number): number {
+  if (max <= 1) return 0;
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const arr = new Uint32Array(1);
+    crypto.getRandomValues(arr);
+    return arr[0] % max;
+  }
+  return Math.floor(Math.random() * max);
+}
+
+// Helper to pick a random word avoiding recently used words in the current match AND across matches
+export function pickRandomWord(usedWordIds: number[] = [], allowedCategories?: CategoryId[]): WordItem {
+  let categoryPool = ALL_WORDS;
   if (allowedCategories && allowedCategories.length > 0) {
-    pool = pool.filter((w) => allowedCategories.includes(w.category));
+    categoryPool = ALL_WORDS.filter((w) => allowedCategories.includes(w.category));
   }
 
-  // Try to pick an unused word first
-  const unused = pool.filter((w) => !usedWordIds.includes(w.id));
-  const selectionPool = unused.length > 0 ? unused : pool;
+  const globalHistory = getGlobalHistory();
+  const matchUsedSet = new Set(usedWordIds);
+  const globalHistorySet = new Set(globalHistory);
 
-  const randomIndex = Math.floor(Math.random() * selectionPool.length);
-  return selectionPool[randomIndex];
+  // Level 1 Priority: Word has NOT been used in this match AND has NOT been used in recent global matches
+  const freshWords = categoryPool.filter((w) => !matchUsedSet.has(w.id) && !globalHistorySet.has(w.id));
+
+  let chosenWord: WordItem;
+
+  if (freshWords.length > 0) {
+    // Pick from truly fresh, unplayed words
+    const idx = getSecureRandomIndex(freshWords.length);
+    chosenWord = freshWords[idx];
+  } else {
+    // Level 2 Priority: If all category words have been played in recent matches,
+    // pick an unused word in the CURRENT match that has been played furthest back in time
+    const unusedInMatch = categoryPool.filter((w) => !matchUsedSet.has(w.id));
+    if (unusedInMatch.length > 0) {
+      // Sort by least recently used in global history
+      unusedInMatch.sort((a, b) => {
+        const idxA = globalHistory.indexOf(a.id);
+        const idxB = globalHistory.indexOf(b.id);
+        // Words with index -1 or larger index in history were played longer ago
+        const rankA = idxA === -1 ? 999999 : idxA;
+        const rankB = idxB === -1 ? 999999 : idxB;
+        return rankB - rankA;
+      });
+      // Pick randomly from the top 30% oldest words to maintain randomization
+      const topSliceCount = Math.max(1, Math.floor(unusedInMatch.length * 0.35));
+      const pool = unusedInMatch.slice(0, topSliceCount);
+      chosenWord = pool[getSecureRandomIndex(pool.length)];
+    } else {
+      // All words in match used, fallback to random from category pool
+      chosenWord = categoryPool[getSecureRandomIndex(categoryPool.length)];
+    }
+  }
+
+  // Record this word into global history so it won't repeat in upcoming matches
+  recordWordPlayed(chosenWord.id);
+  return chosenWord;
 }
 
 export function getWordCountStats() {

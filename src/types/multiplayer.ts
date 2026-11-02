@@ -83,6 +83,9 @@ export interface OnlineRoomData {
   playerCount: number;
   settings: RoomSettings;
   phaseEndsAt: number | null; // Milliseconds timestamp for synchronized countdown
+  clueOrder?: string[]; // Rotating sequence of players taking turns to give clues
+  clueTurnPlayerId?: string | null; // ID of player whose turn it currently is
+  clueTurnIndex?: number; // Current index in clueOrder (0, 1, 2, ...)
   usedWordIds: number[];
   currentWordCategory?: CategoryId;
   winner?: 'innocents' | 'imposter' | 'tie' | null;
