@@ -31,13 +31,13 @@ export const firebaseConfig = {
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore with specific database ID and robust long polling for instant iframe/mobile connectivity
+// Initialize Firestore with specific database ID and auto-detect long polling for fast websockets
 let firestoreInstance: Firestore;
 try {
   firestoreInstance = initializeFirestore(
     app,
     {
-      experimentalForceLongPolling: true,
+      experimentalAutoDetectLongPolling: true,
     },
     firebaseConfig.firestoreDatabaseId
   );
@@ -131,12 +131,12 @@ export async function ensureAuthenticatedUser(): Promise<User> {
         return auth.currentUser;
       }
 
-      // 2. Sign in anonymously with a 7s safety timeout
+      // 2. Sign in anonymously with a 14s safety timeout
       const signInPromise = signInAnonymously(auth).then((cred) => cred.user);
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(
           () => reject(new Error('Authentication timeout. Please check your internet connection or sign in with Google.')),
-          7000
+          14000
         )
       );
 

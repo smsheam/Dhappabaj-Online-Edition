@@ -19,7 +19,7 @@ import { db, auth, ensureAuthenticatedUser, handleFirestoreError, OperationType 
 import { logProductionEvent } from '../utils/productionDiagnostics';
 
 // Timeout helper to prevent infinite hanging on mobile or unstable networks
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number = 7000): Promise<T> {
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number = 15000): Promise<T> {
   let timer: NodeJS.Timeout;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error('Firestore operation timed out')), timeoutMs);
@@ -30,9 +30,9 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number = 7000): Pr
 // Helper to safely execute getDoc with automatic retry and network reconnection
 export async function safeGetDoc(docRef: DocumentReference): Promise<DocumentSnapshot> {
   let attempts = 0;
-  while (attempts < 2) {
+  while (attempts < 3) {
     try {
-      return await withTimeout(getDoc(docRef), 6000);
+      return await withTimeout(getDoc(docRef), 12000);
     } catch (err: any) {
       attempts++;
       const isOffline =
@@ -41,29 +41,29 @@ export async function safeGetDoc(docRef: DocumentReference): Promise<DocumentSna
         err?.message?.includes('unavailable') ||
         err?.message?.includes('timed out');
 
-      if (isOffline && attempts < 2) {
+      if (isOffline && attempts < 3) {
         try {
           await enableNetwork(db);
-          await new Promise((r) => setTimeout(r, 200));
+          await new Promise((r) => setTimeout(r, 300));
           continue;
         } catch {
           // Continue to next attempt
         }
       }
-      if (attempts >= 2) {
+      if (attempts >= 3) {
         throw err;
       }
     }
   }
-  return await withTimeout(getDoc(docRef), 6000);
+  return await withTimeout(getDoc(docRef), 12000);
 }
 
 // Helper to safely execute getDocs with automatic retry and network reconnection
 export async function safeGetDocs(queryRef: Query | CollectionReference): Promise<QuerySnapshot> {
   let attempts = 0;
-  while (attempts < 2) {
+  while (attempts < 3) {
     try {
-      return await withTimeout(getDocs(queryRef), 7000);
+      return await withTimeout(getDocs(queryRef), 12000);
     } catch (err: any) {
       attempts++;
       const isOffline =
@@ -72,21 +72,21 @@ export async function safeGetDocs(queryRef: Query | CollectionReference): Promis
         err?.message?.includes('unavailable') ||
         err?.message?.includes('timed out');
 
-      if (isOffline && attempts < 2) {
+      if (isOffline && attempts < 3) {
         try {
           await enableNetwork(db);
-          await new Promise((r) => setTimeout(r, 200));
+          await new Promise((r) => setTimeout(r, 300));
           continue;
         } catch {
           // Continue to next attempt
         }
       }
-      if (attempts >= 2) {
+      if (attempts >= 3) {
         throw err;
       }
     }
   }
-  return await withTimeout(getDocs(queryRef), 7000);
+  return await withTimeout(getDocs(queryRef), 12000);
 }
 import {
   OnlineRoomData,
@@ -433,7 +433,7 @@ export async function joinOnlineRoom(
       lastActivityAt: now,
       updatedAt: now,
     });
-    await batch.commit();
+    await withTimeout(batch.commit(), 10000);
 
     sessionStorage.setItem('dhappabaj_active_room', roomCode);
     sessionStorage.setItem('dhappabaj_player_id', user.uid);
@@ -448,7 +448,46 @@ export async function joinOnlineRoom(
       },
       player: newPlayer,
     };
-  } catch (error) {
+  } catch (error: any) {
+    const isOffline =
+      error?.message?.includes('offline') ||
+      error?.code === 'unavailable' ||
+      error?.message?.includes('unavailable') ||
+      error?.message?.includes('timed out');
+
+    if (isOffline) {
+      try {
+        await enableNetwork(db);
+        await new Promise((r) => setTimeout(r, 400));
+        const retryBatch = writeBatch(db);
+        const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
+        retryBatch.set(playerRef, sanitizeForFirestore(newPlayer));
+        retryBatch.update(roomRef, {
+          playerCount: existingPlayers.length + 1,
+          lastActivityAt: now,
+          updatedAt: now,
+        });
+        await withTimeout(retryBatch.commit(), 10000);
+
+        sessionStorage.setItem('dhappabaj_active_room', roomCode);
+        sessionStorage.setItem('dhappabaj_player_id', user.uid);
+        sessionStorage.setItem(`dhappabaj_player_token_${roomCode}`, playerSessionToken);
+
+        return {
+          roomData: {
+            ...roomData,
+            playerCount: existingPlayers.length + 1,
+            lastActivityAt: now,
+            updatedAt: now,
+          },
+          player: newPlayer,
+        };
+      } catch (retryErr) {
+        handleFirestoreError(retryErr, OperationType.WRITE, `rooms/${roomCode}/players/${user.uid}`);
+        throw retryErr;
+      }
+    }
+
     handleFirestoreError(error, OperationType.WRITE, `rooms/${roomCode}/players/${user.uid}`);
     throw error;
   }

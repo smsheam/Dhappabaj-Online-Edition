@@ -114,37 +114,61 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
           </div>
 
           <div className="space-y-3">
-            {imposters.map((imp) => (
-              <div
-                key={imp.id}
-                className="p-3.5 rounded-2xl bg-black/40 border border-rose-500/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/50 flex items-center justify-center text-2xl shrink-0">
-                    {imp.avatar || '🕵️'}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-base font-black text-white truncate">
-                      {imp.name}
-                    </div>
-                    <div className="text-xs text-rose-300">
-                      {isEn ? imp.titleEn : imp.titleBn}
-                    </div>
-                  </div>
-                </div>
+            {imposters.map((imp) => {
+              const clueHeGotBn = room.revealedWord?.shortHintBn || room.revealedWord?.hintBn || 'ক্যাটাগরি সম্পর্কিত ইঙ্গিত';
+              const clueHeGotEn = room.revealedWord?.shortHintEn || room.revealedWord?.hintEn || 'Category hint';
+              const clueHeGot = isEn ? clueHeGotEn : clueHeGotBn;
+              const clueHeProvided = imp.clue || (isEn ? 'No clue provided' : 'কোনো ক্লু দেননি');
 
-                {/* Dhappabaj Clue Reveal */}
-                <div className="w-full sm:w-auto p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-center sm:text-right">
-                  <div className="text-[10px] font-bold text-rose-300 uppercase tracking-wider flex items-center justify-center sm:justify-end gap-1">
-                    <MessageSquare className="w-3 h-3" />
-                    <span>{isEn ? 'Clue given by Dhappabaj:' : 'ধাপ্পাবাজের দেওয়া ক্লু:'}</span>
+              return (
+                <div
+                  key={imp.id}
+                  className="p-4 rounded-2xl bg-black/50 border border-rose-500/40 space-y-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/50 flex items-center justify-center text-2xl shrink-0 shadow-md">
+                      {imp.avatar || '🕵️'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-base font-black text-white truncate">
+                        {imp.name}
+                      </div>
+                      <div className="text-xs text-rose-300">
+                        {isEn ? imp.titleEn : imp.titleBn}
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-xl text-xs font-bold bg-rose-500/20 border border-rose-500/40 text-rose-300">
+                      🕵️ {isEn ? 'Dhappabaj' : 'ধাপ্পাবাজ'}
+                    </span>
                   </div>
-                  <div className="text-sm font-black text-amber-300">
-                    "{imp.clue || (isEn ? 'No clue provided' : 'কোনো ক্লু দেননি')}"
+
+                  {/* Dual Clues: The Clue Dhappabaj GOT + The Clue Dhappabaj PROVIDED */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                    {/* 1. Clue / Secret Hint Dhappabaj Got */}
+                    <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-1">
+                      <div className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                        <span>{isEn ? 'The Clue / Hint Dhappabaj Got:' : 'ধাপ্পাবাজ যে গোপন ইঙ্গিতটি পেয়েছিল:'}</span>
+                      </div>
+                      <div className="text-sm sm:text-base font-black text-amber-200">
+                        "{clueHeGot}"
+                      </div>
+                    </div>
+
+                    {/* 2. Clue Dhappabaj Provided in Game */}
+                    <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 space-y-1">
+                      <div className="text-[10px] font-bold text-rose-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <MessageSquare className="w-3.5 h-3.5 text-rose-400" />
+                        <span>{isEn ? 'Clue Dhappabaj Provided in Game:' : 'ধাপ্পাবাজ খেলায় যে ক্লু দিয়েছিল:'}</span>
+                      </div>
+                      <div className="text-sm sm:text-base font-black text-rose-100">
+                        "{clueHeProvided}"
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

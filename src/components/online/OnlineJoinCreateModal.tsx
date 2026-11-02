@@ -126,23 +126,24 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
     setLoading(true);
     sound.playClick();
     try {
-      const createPromise = createOnlineRoom(name, avatar);
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(
-          () =>
-            reject(
-              new Error(
-                isEn
-                  ? 'Connection timeout. Please click Retry below.'
-                  : 'সংযোগের সময় শেষ হয়েছে। নিচে পুনরায় চেষ্টা বাটনে ট্যাপ করুন।'
-              )
-            ),
-          12000
-        )
-      );
+      let result;
+      try {
+        result = await createOnlineRoom(name, avatar);
+      } catch (firstErr: any) {
+        const isTransient =
+          firstErr?.message?.includes('offline') ||
+          firstErr?.code === 'unavailable' ||
+          firstErr?.message?.includes('unavailable') ||
+          firstErr?.message?.includes('timed out');
+        if (isTransient) {
+          await new Promise((r) => setTimeout(r, 600));
+          result = await createOnlineRoom(name, avatar);
+        } else {
+          throw firstErr;
+        }
+      }
 
-      const { roomData, player } = await Promise.race([createPromise, timeoutPromise]);
-      onRoomJoined(roomData, player);
+      onRoomJoined(result.roomData, result.player);
     } catch (err: any) {
       console.error('Room create error:', err);
       const isRestricted =
@@ -199,23 +200,24 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
     setLoading(true);
     sound.playClick();
     try {
-      const joinPromise = joinOnlineRoom(cleanCode, name, avatar);
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(
-          () =>
-            reject(
-              new Error(
-                isEn
-                  ? 'Connection timeout. Please click Retry below.'
-                  : 'সংযোগের সময় শেষ হয়েছে। নিচে পুনরায় চেষ্টা বাটনে ট্যাপ করুন।'
-              )
-            ),
-          12000
-        )
-      );
+      let result;
+      try {
+        result = await joinOnlineRoom(cleanCode, name, avatar);
+      } catch (firstErr: any) {
+        const isTransient =
+          firstErr?.message?.includes('offline') ||
+          firstErr?.code === 'unavailable' ||
+          firstErr?.message?.includes('unavailable') ||
+          firstErr?.message?.includes('timed out');
+        if (isTransient) {
+          await new Promise((r) => setTimeout(r, 600));
+          result = await joinOnlineRoom(cleanCode, name, avatar);
+        } else {
+          throw firstErr;
+        }
+      }
 
-      const { roomData, player } = await Promise.race([joinPromise, timeoutPromise]);
-      onRoomJoined(roomData, player);
+      onRoomJoined(result.roomData, result.player);
     } catch (err: any) {
       console.error('Room join error:', err);
       const isRestricted =
