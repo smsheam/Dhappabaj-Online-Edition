@@ -908,13 +908,13 @@ export async function startOnlineRound(roomCode: string, roundNumber: number = 1
 export async function setOnlineRoomPhase(
   roomCode: string,
   phase: OnlineGamePhase,
-  durationSeconds: number = 0
+  durationSeconds: number = 0,
+  preloadedClueOrder?: string[]
 ) {
   const roomRef = doc(db, 'rooms', roomCode);
   const now = Date.now();
 
   try {
-    const roomSnap = await safeGetDoc(roomRef);
     const updates: Record<string, any> = {
       currentPhase: phase,
       lastActivityAt: now,
@@ -923,21 +923,41 @@ export async function setOnlineRoomPhase(
 
     let phaseEndsAt = durationSeconds > 0 ? now + durationSeconds * 1000 : null;
 
-    if (roomSnap.exists()) {
-      const roomData = roomSnap.data() as OnlineRoomData;
-      if (phase === 'CLUE') {
-        const clueOrder = roomData.clueOrder || [];
-        const clueTimer = durationSeconds > 0 ? durationSeconds : (roomData.settings.clueTimer || 30);
-        phaseEndsAt = now + clueTimer * 1000;
+    if (phase === 'CLUE') {
+      let clueOrder = preloadedClueOrder;
+      if (!clueOrder || clueOrder.length === 0) {
+        try {
+          const roomSnap = await withTimeout(getDoc(roomRef), 3000);
+          if (roomSnap.exists()) {
+            clueOrder = (roomSnap.data() as OnlineRoomData).clueOrder;
+          }
+        } catch {
+          // If fetch times out, proceed anyway with phase update
+        }
+      }
+      if (clueOrder && clueOrder.length > 0) {
         updates.clueTurnIndex = 0;
-        updates.clueTurnPlayerId = clueOrder[0] || null;
+        updates.clueTurnPlayerId = clueOrder[0];
       }
     }
 
-    updates.phaseEndsAt = phaseEndsAt;
-    await updateDoc(roomRef, updates);
+    if (phaseEndsAt !== null) {
+      updates.phaseEndsAt = phaseEndsAt;
+    }
+
+    await withTimeout(updateDoc(roomRef, updates), 8000);
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, `rooms/${roomCode}`);
+    console.error(`Error updating room phase to ${phase}:`, error);
+    try {
+      // Fallback direct update without optional fields to ensure game moves forward
+      await updateDoc(roomRef, {
+        currentPhase: phase,
+        lastActivityAt: now,
+        updatedAt: now,
+      });
+    } catch (fallbackError) {
+      handleFirestoreError(fallbackError, OperationType.UPDATE, `rooms/${roomCode}`);
+    }
   }
 }
 
@@ -1349,22 +1369,36 @@ export function subscribeToOnlineVotes(
 }
 
 // Player confirms they saw their secret role & word
-export async function confirmOnlineCardSeen(roomCode: string) {
-  const user = auth.currentUser;
-  if (!user) return;
+export async function confirmOnlineCardSeen(roomCode: string, playerId?: string) {
+  const activeUid = playerId || auth.currentUser?.uid;
+  if (!activeUid) {
+    console.warn('Cannot confirm card seen: no player ID found');
+    return;
+  }
 
-  const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
+  const playerRef = doc(db, 'rooms', roomCode, 'players', activeUid);
   const roomRef = doc(db, 'rooms', roomCode);
   const now = Date.now();
 
   try {
-    await updateDoc(playerRef, {
-      hasSeenCard: true,
-      lastSeenAt: now,
-    });
-    await updateDoc(roomRef, { lastActivityAt: now });
+    await withTimeout(
+      updateDoc(playerRef, {
+        hasSeenCard: true,
+        lastSeenAt: now,
+      }),
+      6000
+    );
+    // Touch room activity non-blockingly
+    updateDoc(roomRef, { lastActivityAt: now }).catch(() => {});
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, `rooms/${roomCode}/players/${user.uid}`);
+    console.error('Error in confirmOnlineCardSeen:', error);
+    try {
+      await updateDoc(playerRef, {
+        hasSeenCard: true,
+      });
+    } catch (fallbackError) {
+      handleFirestoreError(fallbackError, OperationType.UPDATE, `rooms/${roomCode}/players/${activeUid}`);
+    }
   }
 }
 

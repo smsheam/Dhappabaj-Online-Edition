@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Eye,
   EyeOff,
@@ -10,6 +10,7 @@ import {
   Lock,
   Users,
   Zap,
+  ArrowRight,
 } from 'lucide-react';
 import { Language, Theme } from '../../types/game';
 import { OnlinePlayer, OnlineRoomData, PrivatePlayerRole } from '../../types/multiplayer';
@@ -36,12 +37,13 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
   const isEn = lang === 'en';
   const [isRevealed, setIsRevealed] = useState<boolean>(false);
   const [hasAcknowledged, setHasAcknowledged] = useState<boolean>(currentPlayer.hasSeenCard || false);
-  const [autoAdvancing, setAutoAdvancing] = useState<boolean>(false);
+  const [isProceeding, setIsProceeding] = useState<boolean>(false);
+  const advanceTriggeredRef = useRef<boolean>(false);
 
   const isImposter = privateRole?.role === 'imposter';
   const categoryInfo = privateRole ? CATEGORIES[privateRole.category] : null;
 
-  // Synchronized countdown timer
+  // Synchronized countdown timer for the 45s role reveal phase
   const [timeLeft, setTimeLeft] = useState<number>(() => {
     if (!room.phaseEndsAt) return 45;
     return Math.max(0, Math.ceil((room.phaseEndsAt - Date.now()) / 1000));
@@ -55,44 +57,66 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
   const handleAcknowledge = async () => {
     sound.playClick();
     setHasAcknowledged(true);
-    await confirmOnlineCardSeen(room.roomCode);
+    try {
+      await confirmOnlineCardSeen(room.roomCode, currentPlayer.id);
+    } catch (err) {
+      console.error('Failed to confirm card seen:', err);
+    }
   };
 
   const proceedToClues = async () => {
-    const clueDuration = room.settings.clueTimer || 30;
-    await setOnlineRoomPhase(room.roomCode, 'CLUE', clueDuration);
+    if (isProceeding) return;
+    setIsProceeding(true);
+    sound.playClick();
+    try {
+      const clueDuration = room.settings.clueTimer || 30;
+      await setOnlineRoomPhase(room.roomCode, 'CLUE', clueDuration, room.clueOrder);
+    } catch (err) {
+      console.error('Failed to advance phase to CLUE:', err);
+      // Reset ref and state so retry is possible
+      advanceTriggeredRef.current = false;
+      setIsProceeding(false);
+    }
   };
 
   const confirmedPlayersCount = players.filter((p) => p.hasSeenCard).length;
   const allConfirmed = confirmedPlayersCount === players.length && players.length > 0;
 
-  // Auto-advance timer countdown
+  // 1. Countdown timer for the 45s phase duration
   useEffect(() => {
-    if (!room.phaseEndsAt) return;
+    if (!room.phaseEndsAt || room.currentPhase !== 'ROLE_REVEAL') return;
 
     const interval = setInterval(() => {
       const remaining = Math.max(0, Math.ceil((room.phaseEndsAt! - Date.now()) / 1000));
       setTimeLeft(remaining);
 
-      if (remaining === 0 && !autoAdvancing) {
-        setAutoAdvancing(true);
+      // Auto-advance if time runs out
+      if (remaining === 0 && !advanceTriggeredRef.current && room.currentPhase === 'ROLE_REVEAL') {
+        advanceTriggeredRef.current = true;
+        clearInterval(interval);
         proceedToClues();
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [room.phaseEndsAt, autoAdvancing]);
+  }, [room.phaseEndsAt, room.currentPhase]);
 
-  // Requirement 3 & 4: Automatically advance to Clue stage when all players confirm their card!
+  // 2. Requirement 3 & 4: Automatically advance to Clue stage when all players confirm their card!
   useEffect(() => {
-    if (allConfirmed && !autoAdvancing) {
-      setAutoAdvancing(true);
+    if (allConfirmed && room.currentPhase === 'ROLE_REVEAL') {
+      // Primary: Host client initiates advance quickly (1s).
+      // Fallback: If host tab is asleep or slow, other clients will advance after 3s.
+      const delay = currentPlayer.isHost ? 1000 : 3000;
       const timer = setTimeout(() => {
-        proceedToClues();
-      }, 1200);
+        if (!advanceTriggeredRef.current && room.currentPhase === 'ROLE_REVEAL') {
+          advanceTriggeredRef.current = true;
+          proceedToClues();
+        }
+      }, delay);
+
       return () => clearTimeout(timer);
     }
-  }, [allConfirmed, autoAdvancing]);
+  }, [allConfirmed, room.currentPhase, currentPlayer.isHost]);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between p-3.5 sm:p-6 max-w-2xl mx-auto transition-colors duration-200">
@@ -308,7 +332,7 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
 
       {/* Action Footer */}
       <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
-        {!hasAcknowledged ? (
+        {!hasAcknowledged && (
           <button
             type="button"
             onClick={handleAcknowledge}
@@ -317,20 +341,68 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
             <CheckCircle2 className="w-5 h-5" />
             <span>{isEn ? 'I have seen my word & role' : 'আমি আমার তথ্য দেখে নিয়েছি'}</span>
           </button>
-        ) : (
-          <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-center text-xs font-bold flex items-center justify-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-            <span>
-              {allConfirmed
-                ? isEn
-                  ? 'All players ready! Starting clue stage automatically...'
-                  : 'সবাই প্রস্তুত! ক্লু পর্ব স্বয়ংক্রিয়ভাবে শুরু হচ্ছে...'
-                : isEn
-                ? 'You are confirmed! Waiting for other players...'
-                : 'আপনার দেখা সম্পন্ন হয়েছে! বাকিদের জন্য অপেক্ষা করুন...'}
-            </span>
-          </div>
         )}
+
+        {/* When everyone has confirmed: Show active transition button & status */}
+        {allConfirmed ? (
+          <div className="space-y-2">
+            <div className="p-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-center text-xs font-black flex items-center justify-center gap-2 animate-pulse">
+              <Sparkles className="w-4 h-4 text-emerald-500" />
+              <span>
+                {isEn
+                  ? 'All players confirmed! Advancing to Clue Stage...'
+                  : 'সবাই নিশ্চিত করেছেন! ক্লু পর্ব শুরু হচ্ছে...'}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              disabled={isProceeding}
+              onClick={proceedToClues}
+              className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black text-base shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.99] disabled:opacity-60"
+            >
+              {isProceeding ? (
+                <>
+                  <Clock className="w-5 h-5 animate-spin" />
+                  <span>{isEn ? 'Transitioning to Clues...' : 'ক্লু পর্বে প্রবেশ করা হচ্ছে...'}</span>
+                </>
+              ) : (
+                <>
+                  <span>{isEn ? 'Proceed to Clues Now' : 'পরবর্তী ক্লু পর্বে চলুন'}</span>
+                  <ArrowRight className="w-5 h-5" />
+                </>
+              )}
+            </button>
+          </div>
+        ) : hasAcknowledged ? (
+          <div className="space-y-2">
+            <div className="p-3 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 text-center text-xs font-bold flex items-center justify-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              <span>
+                {isEn
+                  ? `You are confirmed! Waiting for others (${confirmedPlayersCount}/${players.length})...`
+                  : `আপনার দেখা সম্পন্ন হয়েছে! বাকিদের জন্য অপেক্ষা করুন (${confirmedPlayersCount}/${players.length})...`}
+              </span>
+            </div>
+
+            {/* Host override button if someone's device is unresponsive */}
+            {currentPlayer.isHost && (
+              <button
+                type="button"
+                disabled={isProceeding}
+                onClick={proceedToClues}
+                className="w-full py-2.5 px-4 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all disabled:opacity-50"
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-500" />
+                <span>
+                  {isEn
+                    ? 'Start Clue Stage Now (Host Action)'
+                    : 'হোস্ট হিসেবে এখনই ক্লু পর্ব শুরু করুন'}
+                </span>
+              </button>
+            )}
+          </div>
+        ) : null}
 
         {/* Informational banner about automatic progression */}
         <div className="text-center text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1">
