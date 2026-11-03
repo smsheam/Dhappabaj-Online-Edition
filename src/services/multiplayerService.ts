@@ -831,6 +831,9 @@ export async function startOnlineRound(roomCode: string, roundNumber: number = 1
     throw new Error('খেলা শুরু করতে কমপক্ষে ৩ জন খেলোয়াড় প্রয়োজন (Minimum 3 players required to start)');
   }
 
+  // Purge any temporary voice messages from previous gameplay (zero storage guarantee)
+  purgeOnlineVoiceMessages(roomCode).catch(() => {});
+
   // Pick random word
   const categories = roomData.settings.selectedCategories || ['food', 'people', 'object', 'animal'];
   const prevUsedIds = roomData.usedWordIds || [];
@@ -1027,16 +1030,31 @@ export async function submitOnlineClue(roomCode: string, clueText: string) {
       });
     } else {
       // All players in sequence have submitted their clues!
-      // Automatically advance to DISCUSSION!
-      const discussionTimer = (roomData.settings.discussionTimer || 90) * 1000;
+      // Requirement 2: Wait 3 seconds on the Clue page after the last player submits, then proceed to DISCUSSION!
       await updateDoc(roomRef, {
-        currentPhase: 'DISCUSSION',
         clueTurnPlayerId: null,
         clueTurnIndex: clueOrder.length,
-        phaseEndsAt: now + discussionTimer,
         lastActivityAt: now,
         updatedAt: now,
       });
+
+      setTimeout(async () => {
+        try {
+          const currentSnap = await safeGetDoc(roomRef);
+          if (currentSnap.exists() && (currentSnap.data() as OnlineRoomData).currentPhase === 'CLUE') {
+            const discussionTimer = (roomData.settings.discussionTimer || 90) * 1000;
+            const tNow = Date.now();
+            await updateDoc(roomRef, {
+              currentPhase: 'DISCUSSION',
+              phaseEndsAt: tNow + discussionTimer,
+              lastActivityAt: tNow,
+              updatedAt: tNow,
+            });
+          }
+        } catch (e) {
+          console.error('Error transitioning to discussion after 3s:', e);
+        }
+      }, 3000);
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `rooms/${roomCode}`);
@@ -1086,16 +1104,32 @@ export async function advanceOnlineClueTurn(roomCode: string, timedOutPlayerId?:
         updatedAt: now,
       });
     } else {
-      // All players completed clue stage, proceed to DISCUSSION automatically
-      const discussionTimer = (roomData.settings.discussionTimer || 90) * 1000;
+      // All players completed clue stage
+      // Requirement 2: Wait 3 seconds on Clue page before proceeding to DISCUSSION!
       await updateDoc(roomRef, {
-        currentPhase: 'DISCUSSION',
         clueTurnPlayerId: null,
         clueTurnIndex: clueOrder.length,
-        phaseEndsAt: now + discussionTimer,
         lastActivityAt: now,
         updatedAt: now,
       });
+
+      setTimeout(async () => {
+        try {
+          const currentSnap = await safeGetDoc(roomRef);
+          if (currentSnap.exists() && (currentSnap.data() as OnlineRoomData).currentPhase === 'CLUE') {
+            const discussionTimer = (roomData.settings.discussionTimer || 90) * 1000;
+            const tNow = Date.now();
+            await updateDoc(roomRef, {
+              currentPhase: 'DISCUSSION',
+              phaseEndsAt: tNow + discussionTimer,
+              lastActivityAt: tNow,
+              updatedAt: tNow,
+            });
+          }
+        } catch (e) {
+          console.error('Error transitioning to discussion after 3s:', e);
+        }
+      }, 3000);
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `rooms/${roomCode}`);
@@ -1230,8 +1264,8 @@ export async function resolveOnlineVotingResults(roomCode: string) {
 
   batch.update(roomRef, {
     currentPhase: nextPhase,
-    // Requirement 7: Imposter reveal result page increased to 15s (15000ms)
-    phaseEndsAt: shouldGuess ? now + 45000 : now + 15000,
+    // Requirement 1: Imposter reveal result page set to 20s (20000ms)
+    phaseEndsAt: shouldGuess ? now + 45000 : now + 20000,
     eliminatedPlayerId: eliminatedId,
     revealedVotes: votesMap,
     scoreDetails: sanitizeForFirestore(scoreDetails),
@@ -1303,8 +1337,8 @@ export async function submitOnlineImposterGuess(
     imposterGuessAnswer: guess.trim(),
     winner: isCorrect ? 'imposter' : 'innocents',
     scoreDetails: sanitizeForFirestore(updatedScoreDetails),
-    // Requirement 7: Result reveal page time is 15s (15000ms)
-    phaseEndsAt: now + 15000,
+    // Requirement 1: Result reveal page time is 20s (20000ms)
+    phaseEndsAt: now + 20000,
     lastActivityAt: now,
     updatedAt: now,
   });
@@ -1491,3 +1525,61 @@ export function subscribeToChatMessages(
     }
   );
 }
+
+// Send live ephemeral voice message to room (zero permanent storage)
+export async function sendOnlineVoiceMessage(
+  roomCode: string,
+  player: OnlinePlayer,
+  audioBase64: string,
+  durationMs: number = 2500
+) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const msgId = `v-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const msgRef = doc(db, 'rooms', roomCode, 'messages', msgId);
+  const roomRef = doc(db, 'rooms', roomCode);
+  const now = Date.now();
+
+  const voiceMsg: ChatMessage = {
+    id: msgId,
+    senderId: user.uid,
+    senderName: player.name,
+    senderAvatar: player.avatar,
+    senderColor: player.avatarColor,
+    text: '🎙️ [ভয়েস বার্তা]',
+    isVoice: true,
+    audioData: audioBase64,
+    durationMs,
+    timestamp: now,
+  };
+
+  try {
+    await setDoc(msgRef, sanitizeForFirestore(voiceMsg));
+    await updateDoc(roomRef, { lastActivityAt: now });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `rooms/${roomCode}/messages/${msgId}`);
+  }
+}
+
+// Purge voice messages after gameplay to guarantee zero retained audio
+export async function purgeOnlineVoiceMessages(roomCode: string) {
+  try {
+    const msgsSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'messages'));
+    const batch = writeBatch(db);
+    let count = 0;
+    msgsSnap.docs.forEach((d) => {
+      const data = d.data() as ChatMessage;
+      if (data.isVoice) {
+        batch.delete(d.ref);
+        count++;
+      }
+    });
+    if (count > 0) {
+      await batch.commit();
+    }
+  } catch (err) {
+    console.warn('Voice purge error:', err);
+  }
+}
+

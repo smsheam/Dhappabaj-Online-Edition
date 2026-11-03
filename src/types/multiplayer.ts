@@ -120,4 +120,7 @@ export interface ChatMessage {
   senderColor?: string;
   text: string;
   timestamp: number;
+  isVoice?: boolean;
+  audioData?: string;
+  durationMs?: number;
 }

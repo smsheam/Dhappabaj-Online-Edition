@@ -42,13 +42,13 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
   const isEliminatedImposter = eliminatedPlayer ? imposterIds.includes(eliminatedPlayer.id) : false;
   const isImposterWin = room.winner === 'imposter';
 
-  // Auto progression countdown to scoreboard (Requirement 7: exactly 15 seconds)
+  // Auto progression countdown to scoreboard (Requirement 1: 20 seconds)
   const [autoTimer, setAutoTimer] = useState<number>(() => {
     if (room.phaseEndsAt) {
       const remaining = Math.ceil((room.phaseEndsAt - Date.now()) / 1000);
-      return Math.max(1, Math.min(15, remaining));
+      return Math.max(1, Math.min(20, remaining));
     }
-    return 15;
+    return 20;
   });
 
   useEffect(() => {

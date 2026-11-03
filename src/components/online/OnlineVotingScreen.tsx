@@ -78,12 +78,12 @@ export const OnlineVotingScreen: React.FC<OnlineVotingScreenProps> = ({
   const votedCount = players.filter((p) => p.hasVoted).length;
   const allVoted = votedCount === players.length && players.length > 0;
 
-  // Requirement 3 & 4: Automatically resolve voting when all players have voted!
+  // Requirement 2: Wait 3 seconds on voting page after all players vote before transitioning!
   useEffect(() => {
     if (allVoted && !resolving) {
       const timer = setTimeout(() => {
         handleResolveResults();
-      }, 1200);
+      }, 3000);
       return () => clearTimeout(timer);
     }
   }, [allVoted, resolving]);
@@ -295,6 +295,14 @@ export const OnlineVotingScreen: React.FC<OnlineVotingScreenProps> = ({
 
       {/* Footer Actions */}
       <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
+        {allVoted && (
+          <div className="p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-center text-xs font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in">
+            {isEn
+              ? '✓ All players have voted! Waiting 3 seconds before revealing results...'
+              : '✓ সকল খেলোয়াড় ভোট দিয়েছেন! ৩ সেকেন্ড অপেক্ষা শেষে ফলাফল উন্মোচন হচ্ছে...'}
+          </div>
+        )}
+
         {!hasVoted && (
           <button
             type="button"

@@ -66,8 +66,8 @@ export function calculateRoundScores({
       if (votesReceived >= players.length - 1 && players.length > 2) {
         pointsDelta += 3;
         reasons.push({
-          bn: 'নির্দোষ ফাঁসানো বোনাস (+৩)',
-          en: 'Framed innocent martyr bonus (+3)',
+          bn: 'নির্দোষ হওয়ায় পেয়েছে (+৩)',
+          en: 'Innocent martyr bonus (+3)',
         });
       }
     } else {

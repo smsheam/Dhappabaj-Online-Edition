@@ -85,12 +85,7 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
   const [isScoreRulesOpen, setIsScoreRulesOpen] = useState<boolean>(false);
   const [drawerTab, setDrawerTab] = useState<'scores' | 'rules'>('scores');
 
-  // Requirement 3: 3-Second Transition Countdown
-  const [transitionCountdown, setTransitionCountdown] = useState<number | null>(null);
-  const [transitionPhaseInfo, setTransitionPhaseInfo] = useState<{ titleBn: string; titleEn: string; icon: string } | null>(null);
-  const prevPhaseRef = useRef<OnlineGamePhase>(initialRoom.currentPhase);
-
-  // Countdown for host disconnect grace period
+  // Host disconnect countdown tracker (30 seconds)
   const [hostDisconnectSecondsLeft, setHostDisconnectSecondsLeft] = useState<number | null>(null);
 
   const currentUserId = auth.currentUser?.uid || initialPlayer.id;
@@ -133,47 +128,6 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
     const active = sound.toggleBackgroundMusic();
     setIsBgmPlaying(active);
   };
-
-  // Requirement 3: 3-Second countdown & transition animation between stages
-  useEffect(() => {
-    if (prevPhaseRef.current !== room.currentPhase && room.currentPhase !== 'LOBBY') {
-      const phaseMetadata: Record<string, { titleBn: string; titleEn: string; icon: string }> = {
-        ROLE_REVEAL: { titleBn: 'গোপন কার্ড ও পরিচয় দর্শন', titleEn: 'Secret Role Reveal', icon: '🔒' },
-        CLUE: { titleBn: '১ম ধাপ: ক্রমানুসারে ক্লু প্রদান', titleEn: 'Stage 1: Clue Round', icon: '💬' },
-        DISCUSSION: { titleBn: '২য় ধাপ: সরাসরি আলোচনা ও জেরা', titleEn: 'Stage 2: Live Interrogation', icon: '🎙️' },
-        VOTING: { titleBn: '৩য় ধাপ: গোপন ভোটদান পর্ব', titleEn: 'Stage 3: Secret Voting', icon: '🗳️' },
-        IMPOSTER_GUESS: { titleBn: 'ধাপ্পাবাজের শেষ সুযোগ (শব্দ অনুমান)', titleEn: 'Imposter Final Guess', icon: '🎯' },
-        RESULT: { titleBn: 'চূড়ান্ত ফলাফল ও ধাপ্পাবাজ প্রকাশ', titleEn: 'Round Results Reveal', icon: '🕵️' },
-        ROUND_SUMMARY: { titleBn: 'ম্যাচ লিডারবোর্ড ও পয়েন্ট', titleEn: 'Match Standings', icon: '🏆' },
-        GAME_OVER: { titleBn: 'ম্যাচ সমাপ্তি ও চূড়ান্ত চ্যাম্পিয়ন', titleEn: 'Final Champions Podium', icon: '👑' },
-      };
-
-      const info = phaseMetadata[room.currentPhase] || { titleBn: 'পরবর্তী পর্ব', titleEn: 'Next Stage', icon: '✨' };
-      setTransitionPhaseInfo(info);
-      setTransitionCountdown(3);
-      sound.playCountdownTick(3);
-
-      let step = 3;
-      const interval = setInterval(() => {
-        step--;
-        if (step > 0) {
-          setTransitionCountdown(step);
-          sound.playCountdownTick(step);
-        } else if (step === 0) {
-          setTransitionCountdown(0);
-          sound.playTransitionWhoosh();
-        } else {
-          clearInterval(interval);
-          setTransitionCountdown(null);
-        }
-      }, 1000);
-
-      prevPhaseRef.current = room.currentPhase;
-      return () => clearInterval(interval);
-    } else {
-      prevPhaseRef.current = room.currentPhase;
-    }
-  }, [room.currentPhase]);
 
   // Real-time Firestore Subscriptions
   useEffect(() => {
@@ -472,36 +426,7 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
         </div>
       )}
 
-      {/* Requirement 3: 3-Second Transition Countdown Overlay */}
-      {transitionCountdown !== null && transitionPhaseInfo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="text-center space-y-4 max-w-sm w-full">
-            <div className="w-20 h-20 mx-auto rounded-3xl bg-amber-500/20 border-2 border-amber-500/50 flex items-center justify-center text-4xl shadow-2xl shadow-amber-500/25 animate-bounce">
-              {transitionPhaseInfo.icon}
-            </div>
 
-            <div className="space-y-1">
-              <span className="text-xs uppercase tracking-widest font-extrabold text-amber-500">
-                {isEn ? 'Stage Transition' : 'পরবর্তী পর্ব প্রস্তুত হচ্ছে'}
-              </span>
-              <h2 className="text-xl sm:text-2xl font-black text-white">
-                {isEn ? transitionPhaseInfo.titleEn : transitionPhaseInfo.titleBn}
-              </h2>
-            </div>
-
-            {/* Glowing Countdown Number */}
-            <div className="flex items-center justify-center py-2">
-              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-amber-500 to-amber-600 text-slate-950 font-black text-5xl flex items-center justify-center shadow-2xl shadow-amber-500/50 animate-pulse border-4 border-amber-300">
-                {transitionCountdown === 0 ? (isEn ? 'GO!' : 'শুরু!') : transitionCountdown}
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-400">
-              {isEn ? 'Get ready for the next round action!' : 'পরবর্তী পর্বের জন্য প্রস্তুত হন!'}
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* Requirement 6: Persistent Live Score & Rule Book Modal */}
       {isScoreRulesOpen && (
@@ -646,7 +571,7 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
                         </tr>
                         <tr>
                           <td className="py-1 font-sans text-slate-600 dark:text-slate-300">
-                            {isEn ? 'Framed innocent bonus' : 'নির্দোষ ফাঁসানোর বোনাস'}
+                            {isEn ? 'Framed innocent bonus' : 'নির্দোষ হওয়ায় পেয়েছে'}
                           </td>
                           <td className="py-1 text-right text-amber-500 font-bold">+৩</td>
                         </tr>
