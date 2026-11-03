@@ -271,6 +271,77 @@ class SoundManager {
     this.playWarningTick();
   }
 
+  // 3-second stage countdown tick with rising pitch
+  public playCountdownTick(count: number = 3) {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      if (!ctx || !this.masterGain) return;
+      const now = ctx.currentTime;
+
+      const baseFreq = count === 1 ? 880 : count === 2 ? 720 : 580;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(baseFreq, now);
+      osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.9, now + 0.12);
+
+      gain.gain.setValueAtTime(0.4, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc.start(now);
+      osc.stop(now + 0.14);
+    } catch {
+      // AudioContext safeguard
+    }
+  }
+
+  // Dynamic whoosh / gong transition into next stage
+  public playTransitionWhoosh() {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      if (!ctx || !this.masterGain) return;
+      const now = ctx.currentTime;
+
+      // 1. Resonant bell chime
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(523.25, now); // C5
+      osc.frequency.exponentialRampToValueAtTime(1046.5, now + 0.25); // C6
+
+      gain.gain.setValueAtTime(0.35, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(now);
+      osc.stop(now + 0.6);
+
+      // 2. Low boom swell
+      const sub = ctx.createOscillator();
+      const subGain = ctx.createGain();
+      sub.type = 'triangle';
+      sub.frequency.setValueAtTime(160, now);
+      sub.frequency.exponentialRampToValueAtTime(75, now + 0.4);
+
+      subGain.gain.setValueAtTime(0.3, now);
+      subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+      sub.connect(subGain);
+      subGain.connect(this.masterGain);
+      sub.start(now);
+      sub.stop(now + 0.5);
+    } catch {
+      // AudioContext safeguard
+    }
+  }
+
   public playVoteCast() {
     this.playClick();
   }
@@ -281,6 +352,110 @@ class SoundManager {
 
   public playVictory() {
     this.playSuccessChime();
+  }
+
+  // Procedural Suspense Background Music (BGM)
+  private bgmGain: GainNode | null = null;
+  private bgmTimer: NodeJS.Timeout | null = null;
+  private isBgmPlayingState: boolean = false;
+  private currentChordIndex: number = 0;
+
+  // Chord notes for subtle mystery ambient music (Am, F, Dm, Em)
+  private readonly bgmChords = [
+    [110.0, 164.81, 220.0, 261.63, 329.63], // A2, E3, A3, C4, E4
+    [87.31, 130.81, 174.61, 220.0, 261.63],  // F2, C3, F3, A3, C4
+    [73.42, 110.0, 146.83, 220.0, 293.66],   // D2, A2, D3, A3, D4
+    [82.41, 123.47, 164.81, 246.94, 329.63], // E2, B2, E3, B3, E4
+  ];
+
+  public startBackgroundMusic() {
+    if (this.isBgmPlayingState) return;
+    try {
+      const ctx = this.initContext();
+      if (!ctx) return;
+
+      if (!this.bgmGain) {
+        this.bgmGain = ctx.createGain();
+        this.bgmGain.gain.setValueAtTime(0.12, ctx.currentTime);
+        if (this.masterGain) {
+          this.bgmGain.connect(this.masterGain);
+        } else {
+          this.bgmGain.connect(ctx.destination);
+        }
+      }
+
+      this.isBgmPlayingState = true;
+      this.currentChordIndex = 0;
+
+      const playChordPulse = () => {
+        if (!this.isBgmPlayingState || !this.ctx || !this.bgmGain) return;
+        const now = this.ctx.currentTime;
+        const chord = this.bgmChords[this.currentChordIndex % this.bgmChords.length];
+        this.currentChordIndex++;
+
+        // Soft sub-bass pad
+        const bassOsc = this.ctx.createOscillator();
+        const bassGain = this.ctx.createGain();
+        bassOsc.type = 'sine';
+        bassOsc.frequency.setValueAtTime(chord[0], now);
+
+        bassGain.gain.setValueAtTime(0.01, now);
+        bassGain.gain.linearRampToValueAtTime(0.2, now + 0.4);
+        bassGain.gain.exponentialRampToValueAtTime(0.001, now + 2.2);
+
+        bassOsc.connect(bassGain);
+        bassGain.connect(this.bgmGain);
+        bassOsc.start(now);
+        bassOsc.stop(now + 2.2);
+
+        // Gentle arpeggiated bells
+        chord.slice(1).forEach((freq, idx) => {
+          if (!this.ctx || !this.bgmGain) return;
+          const noteTime = now + idx * 0.28;
+          const osc = this.ctx.createOscillator();
+          const noteGain = this.ctx.createGain();
+
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, noteTime);
+
+          noteGain.gain.setValueAtTime(0.01, noteTime);
+          noteGain.gain.linearRampToValueAtTime(0.15, noteTime + 0.05);
+          noteGain.gain.exponentialRampToValueAtTime(0.001, noteTime + 0.6);
+
+          osc.connect(noteGain);
+          noteGain.connect(this.bgmGain);
+          osc.start(noteTime);
+          osc.stop(noteTime + 0.6);
+        });
+      };
+
+      playChordPulse();
+      this.bgmTimer = setInterval(playChordPulse, 2400);
+    } catch {
+      // AudioContext safeguard
+    }
+  }
+
+  public stopBackgroundMusic() {
+    this.isBgmPlayingState = false;
+    if (this.bgmTimer) {
+      clearInterval(this.bgmTimer);
+      this.bgmTimer = null;
+    }
+  }
+
+  public isBgmPlaying(): boolean {
+    return this.isBgmPlayingState;
+  }
+
+  public toggleBackgroundMusic(): boolean {
+    if (this.isBgmPlayingState) {
+      this.stopBackgroundMusic();
+      return false;
+    } else {
+      this.startBackgroundMusic();
+      return true;
+    }
   }
 }
 

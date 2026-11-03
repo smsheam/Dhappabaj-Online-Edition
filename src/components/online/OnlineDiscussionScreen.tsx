@@ -9,6 +9,9 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
+  Mic,
+  MicOff,
+  Volume2,
 } from 'lucide-react';
 import { Language, Theme } from '../../types/game';
 import { OnlinePlayer, OnlineRoomData, ChatMessage } from '../../types/multiplayer';
@@ -40,6 +43,83 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
   const [inputText, setInputText] = useState<string>('');
   const [showCluesList, setShowCluesList] = useState<boolean>(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Requirement 9: Microphone talk support (ephemeral, zero storage)
+  const [isMicActive, setIsMicActive] = useState<boolean>(false);
+  const [micVolume, setMicVolume] = useState<number>(0);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const animFrameRef = useRef<number | null>(null);
+
+  const startMicrophone = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      setIsMicActive(true);
+      sound.playClick();
+
+      // Realtime decibel analyzer for volume meter
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        audioContextRef.current = ctx;
+        const source = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 64;
+        source.connect(analyser);
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const updateLevel = () => {
+          if (!mediaStreamRef.current) return;
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i];
+          }
+          const avg = sum / dataArray.length;
+          setMicVolume(Math.min(100, Math.round((avg / 128) * 100)));
+          animFrameRef.current = requestAnimationFrame(updateLevel);
+        };
+        updateLevel();
+      }
+    } catch (err) {
+      console.warn('Microphone permission not granted or unsupported:', err);
+      setIsMicActive(false);
+    }
+  };
+
+  const stopMicrophone = () => {
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+    setIsMicActive(false);
+    setMicVolume(0);
+    sound.playClick();
+  };
+
+  // Cleanup mic on unmount or phase change
+  useEffect(() => {
+    return () => {
+      stopMicrophone();
+    };
+  }, []);
+
+  const toggleMicrophone = () => {
+    if (isMicActive) {
+      stopMicrophone();
+    } else {
+      startMicrophone();
+    }
+  };
 
   // Synchronized Discussion Timer
   const [timeLeft, setTimeLeft] = useState<number>(() => {
@@ -105,8 +185,38 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
   };
 
   const quickPhrases = isEn
-    ? ['You are the imposter! 🕵️', 'I am innocent! 🛡️', 'Suspicious clue! 🤔', 'Why so quiet? 🤐']
-    : ['তুমিই ধাপ্পাবাজ! 🕵️', 'আমি নির্দোষ নাগরিক! 🛡️', 'ক্লুটা কেমন যেন! 🤔', 'চুপচাপ কেন? 🤐'];
+    ? [
+        'You are the imposter! 🕵️',
+        'I am 100% innocent citizen! 🛡️',
+        'That clue is super suspicious! 🤔',
+        'Why are you looking at me?! 👀',
+        'Guaranteed imposter caught! 🫵',
+        'Why so quiet? Confess! 🤐',
+        'I swear I am an innocent baby! 🍼',
+        'Imposter is trembling now! 😂',
+        'Don\'t vote me, you will regret! 🛑',
+        'Lying is a bad sin! 🤫',
+        'Caught red handed! 💀',
+        'Talk less, act smart! 🏃‍♂️',
+        'Something is cooking here! 🍲',
+        'Facts right there! 💯',
+      ]
+    : [
+        'ভাইরে ভাই ধাপ্পাবাজ কে?! 🤯',
+        'আমার দিকে তাকাচ্ছেন কেন?! 👀',
+        '১০০% শিওর এইটাই চোর! 🫵',
+        'বিশ্বাস করেন আমি নিষ্পাপ পাবলিক 😇',
+        'ক্লুটা তো পুরাই সন্দেহজনক! 🤔',
+        'আরে ধুর, আমি একদম নির্দোষ! 🛡️',
+        'ধাপ্পাবাজের হাত-পা কাঁপতেছে! 😂',
+        'মিথ্যা কথা বলা মহাপাপ ভাই 🤫',
+        'আমাকে ভোট দিলে পরে আফসোস করবেন! 🛑',
+        'ধরা খাইলে কিন্তু খবর আছে! 💀',
+        'চোর পালালে বুদ্ধি বাড়ে 🏃‍♂️',
+        'কথা কম, কাজ বেশি! 🤐',
+        'ডাল মে কুচ কালা হ্যায়! 🍲',
+        'একদম খাঁটি কথা 💯',
+      ];
 
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
@@ -253,8 +363,36 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
           ))}
         </div>
 
-        {/* Message Input Form */}
+        {/* Live Microphone Voice Indicator (Ephemeral, Zero storage) */}
+        {isMicActive && (
+          <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold animate-pulse">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+              <span>{isEn ? 'Microphone Active (Speaking live...)' : '🎙️ মাইক্রোফোন চালু (সরাসরি কথা বলুন...)'}</span>
+            </div>
+            <div className="flex items-center gap-1 font-mono text-[10px]">
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>{micVolume}%</span>
+            </div>
+          </div>
+        )}
+
+        {/* Message Input Form with Microphone Toggle */}
         <form onSubmit={handleSendMessage} className="flex gap-2 shrink-0 pt-1">
+          {/* Microphone Talk Button */}
+          <button
+            type="button"
+            onClick={toggleMicrophone}
+            title={isMicActive ? (isEn ? 'Mute Microphone' : 'মাইক বন্ধ করুন') : (isEn ? 'Speak using Microphone' : 'মাইক্রোফোনে কথা বলুন')}
+            className={`px-3 py-2.5 rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${
+              isMicActive
+                ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-500/30 animate-pulse'
+                : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:text-amber-500'
+            }`}
+          >
+            {isMicActive ? <Mic className="w-4 h-4 text-slate-950" /> : <MicOff className="w-4 h-4" />}
+          </button>
+
           <input
             type="text"
             value={inputText}

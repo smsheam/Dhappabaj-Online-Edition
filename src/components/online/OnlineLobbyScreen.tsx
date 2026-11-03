@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Users,
   Copy,
@@ -16,9 +16,12 @@ import {
   Layers,
   Sparkles,
   AlertTriangle,
+  MessageSquare,
+  Send,
+  Smile,
 } from 'lucide-react';
 import { Language, Theme, CategoryId } from '../../types/game';
-import { OnlinePlayer, OnlineRoomData, RoomSettings } from '../../types/multiplayer';
+import { OnlinePlayer, OnlineRoomData, RoomSettings, ChatMessage } from '../../types/multiplayer';
 import { CATEGORIES } from '../../data/categories';
 import {
   togglePlayerReady,
@@ -27,6 +30,8 @@ import {
   kickOnlinePlayer,
   leaveOnlineRoom,
   startOnlineRound,
+  subscribeToChatMessages,
+  sendOnlineChatMessage,
 } from '../../services/multiplayerService';
 import { sound } from '../../utils/audio';
 
@@ -55,6 +60,39 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
   const [renameValue, setRenameValue] = useState<string>(currentPlayer.name);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [starting, setStarting] = useState<boolean>(false);
+
+  // Requirement 1: Lobby live chat & emoji sharing
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState<string>('');
+  const [isChatOpen, setIsChatOpen] = useState<boolean>(true);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const unsub = subscribeToChatMessages(room.roomCode, (messages) => {
+      setChatMessages(messages);
+    });
+    return () => unsub();
+  }, [room.roomCode]);
+
+  useEffect(() => {
+    if (chatMessages.length > 0) {
+      chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages]);
+
+  const handleSendLobbyMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!chatInput.trim()) return;
+    const text = chatInput.trim();
+    setChatInput('');
+    sound.playClick();
+    await sendOnlineChatMessage(room.roomCode, currentPlayer, text);
+  };
+
+  const handleSendQuickReaction = async (phrase: string) => {
+    sound.playClick();
+    await sendOnlineChatMessage(room.roomCode, currentPlayer, phrase);
+  };
 
   const [tempSettings, setTempSettings] = useState<RoomSettings>({ ...room.settings });
   const [isLeavingConfirmOpen, setIsLeavingConfirmOpen] = useState<boolean>(false);
@@ -350,6 +388,119 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
         </div>
       </div>
 
+      {/* Requirement 1: Lobby Live Chat & Quick Bangla Reactions */}
+      <div className="mb-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 shadow-xs space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
+            <MessageSquare className="w-3.5 h-3.5 text-amber-500" />
+            <span>{isEn ? 'Lobby Live Chat & Reactions' : 'লবি লাইভ চ্যাট ও রিঅ্যাকশন'}</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-mono">
+              {chatMessages.length}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsChatOpen(!isChatOpen)}
+            className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
+          >
+            {isChatOpen ? (isEn ? 'Minimize' : 'ছোট করুন') : (isEn ? 'Expand' : 'খুলুন')}
+          </button>
+        </div>
+
+        {isChatOpen && (
+          <div className="space-y-2 pt-1 border-t border-slate-100 dark:border-slate-800/80">
+            {/* Messages Scroll Area */}
+            <div className="h-28 overflow-y-auto space-y-1.5 p-1 bg-slate-50 dark:bg-slate-950/70 rounded-xl text-xs">
+              {chatMessages.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-[11px] text-slate-400">
+                  {isEn ? 'Say hello or tap an emoji while waiting!' : 'অপেক্ষা করার সময় হাই বলুন বা ইমোজি দিন!'}
+                </div>
+              ) : (
+                chatMessages.map((msg) => {
+                  const isMine = msg.senderId === currentPlayer.id;
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}
+                    >
+                      <div className="flex items-center gap-1 text-[10px] text-slate-400 px-1">
+                        <span>{msg.senderAvatar || '🕵️'}</span>
+                        <span className="font-semibold">{msg.senderName}</span>
+                      </div>
+                      <div
+                        className={`px-2.5 py-1 rounded-xl max-w-[85%] text-xs font-medium break-words ${
+                          isMine
+                            ? 'bg-amber-500 text-slate-950'
+                            : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 text-slate-800 dark:text-slate-200'
+                        }`}
+                      >
+                        {msg.text}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={chatBottomRef} />
+            </div>
+
+            {/* Quick Emoji Reaction Buttons */}
+            <div className="flex items-center gap-1 overflow-x-auto py-1">
+              {['😂', '🤫', '👀', '🔥', '💀', '🕵️', '🤡', '🎯'].map((emoji) => (
+                <button
+                  type="button"
+                  key={emoji}
+                  onClick={() => handleSendQuickReaction(emoji)}
+                  className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-amber-500/20 text-sm transition-all cursor-pointer shrink-0"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+
+            {/* Quick Bangla Chats */}
+            <div className="flex gap-1.5 overflow-x-auto py-0.5 no-scrollbar">
+              {[
+                'দেরি কেন? খেলা শুরু করো! 🚀',
+                'আজকে আমি ধাপ্পাবাজ হব! 😈',
+                'কে ধাপ্পাবাজ হবে আজ? 🕵️',
+                'আমি কিন্তু একদম খাঁটি মানুষ! 😇',
+                'সবাই রেডি তো? ⏳',
+                'ধাপ্পাবাজ ধরা খেলে খবর আছে! 💀',
+              ].map((phrase) => (
+                <button
+                  type="button"
+                  key={phrase}
+                  onClick={() => handleSendQuickReaction(phrase)}
+                  className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200/60 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+                >
+                  {phrase}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom Text Chat Form */}
+            <form onSubmit={handleSendLobbyMessage} className="flex gap-1.5 pt-1">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                maxLength={80}
+                placeholder={isEn ? 'Chat in lobby...' : 'লবিতে কথা বলুন...'}
+                className="flex-1 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-medium focus:outline-none focus:border-amber-500"
+              />
+              <button
+                type="submit"
+                disabled={!chatInput.trim()}
+                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1 cursor-pointer disabled:opacity-40"
+              >
+                <Send className="w-3 h-3" />
+                <span>{isEn ? 'Send' : 'পাঠান'}</span>
+              </button>
+            </form>
+          </div>
+        )}
+      </div>
+
       {/* Error alert if any */}
       {errorMsg && (
         <div className="p-3 mb-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-bold text-center">
@@ -563,13 +714,13 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
                 </div>
               </div>
 
-              {/* Discussion Timer (45, 60, 90, 120s) */}
+              {/* Discussion Timer (60, 90, 120, 150s / 2.30m) */}
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
-                  {isEn ? 'Discussion Time' : 'আলোচনার সময়'}
+                  {isEn ? 'Discussion Time (Max 2.30 min)' : 'আলোচনার সময় (সর্বোচ্চ ২.৩০ মিনিট)'}
                 </label>
                 <div className="grid grid-cols-4 gap-2">
-                  {[45, 60, 90, 120].map((sec) => (
+                  {[60, 90, 120, 150].map((sec) => (
                     <button
                       type="button"
                       key={sec}
@@ -580,7 +731,7 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                       }`}
                     >
-                      {sec}s
+                      {sec === 150 ? (isEn ? '150s (2.3m)' : '১৫০সে (২.৩মি)') : `${sec}s`}
                     </button>
                   ))}
                 </div>

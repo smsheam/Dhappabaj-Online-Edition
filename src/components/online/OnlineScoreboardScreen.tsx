@@ -93,9 +93,26 @@ export const OnlineScoreboardScreen: React.FC<OnlineScoreboardScreenProps> = ({
 
               {/* Total Score */}
               <div className="text-right shrink-0">
-                <span className="text-xl font-black font-mono text-amber-500">
-                  {p.score}
-                </span>
+                <div className="flex items-baseline justify-end gap-1.5">
+                  <span className="text-xl font-black font-mono text-amber-500">
+                    {p.score}
+                  </span>
+                  {(() => {
+                    const delta = room.scoreDetails?.find((d) => d.playerId === p.id)?.pointsDelta;
+                    if (delta === undefined) return null;
+                    return (
+                      <span
+                        className={`text-xs font-mono font-bold px-1.5 py-0.5 rounded ${
+                          delta >= 0
+                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+                        }`}
+                      >
+                        {delta >= 0 ? `+${delta}` : delta}
+                      </span>
+                    );
+                  })()}
+                </div>
                 <span className="text-[10px] text-slate-400 block">
                   {isEn ? 'pts' : 'পয়েন্ট'}
                 </span>

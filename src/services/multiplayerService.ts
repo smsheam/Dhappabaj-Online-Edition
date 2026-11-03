@@ -355,15 +355,34 @@ export async function joinOnlineRoom(
     activeUser = await resetToFreshSession();
   }
 
-  // Check if player is already in this room (reconnection)
-  const existingSelf = existingPlayers.find((p) => p.id === activeUser.uid);
-  if (existingSelf && (hasHostSessionForRoom || existingSelf.name.toLowerCase() === playerName.trim().toLowerCase())) {
-    const isHost = existingSelf.isHost || activeUser.uid === roomData.hostId;
-    const playerRef = doc(db, 'rooms', roomCode, 'players', activeUser.uid);
+  // Check if player is already in this room (reconnection or accidental disconnect recovery)
+  const storedPlayerId = sessionStorage.getItem('dhappabaj_player_id');
+  const storedToken = sessionStorage.getItem(`dhappabaj_player_token_${roomCode}`);
+  
+  const existingSelf = existingPlayers.find((p) => {
+    if (p.id === activeUser.uid) return true;
+    if (storedPlayerId && p.id === storedPlayerId) return true;
+    if (storedToken && p.sessionToken && p.sessionToken === storedToken) return true;
+    // Allow rejoin by matching name if player went offline within last 45 seconds (Requirement 8)
+    if (
+      p.name.trim().toLowerCase() === playerName.trim().toLowerCase() &&
+      (p.connectionStatus === 'offline' || (now - (p.lastSeenAt || p.joinedAt) < 45000))
+    ) {
+      return true;
+    }
+    return false;
+  });
+
+  if (existingSelf) {
+    const isHost = existingSelf.isHost || existingSelf.id === roomData.hostId || activeUser.uid === roomData.hostId;
+    const targetPlayerId = existingSelf.id;
+    const playerRef = doc(db, 'rooms', roomCode, 'players', targetPlayerId);
 
     const playerUpdates: Record<string, any> = {
       connectionStatus: 'online',
       lastSeenAt: now,
+      disconnectedAt: null,
+      canRejoinUntil: null,
     };
 
     const roomUpdates: Record<string, any> = {
@@ -383,7 +402,10 @@ export async function joinOnlineRoom(
       await batch.commit();
 
       sessionStorage.setItem('dhappabaj_active_room', roomCode);
-      sessionStorage.setItem('dhappabaj_player_id', activeUser.uid);
+      sessionStorage.setItem('dhappabaj_player_id', targetPlayerId);
+      if (existingSelf.sessionToken) {
+        sessionStorage.setItem(`dhappabaj_player_token_${roomCode}`, existingSelf.sessionToken);
+      }
 
       return {
         roomData: { ...roomData, ...roomUpdates },
@@ -398,7 +420,7 @@ export async function joinOnlineRoom(
   // If game is in progress or ended, reject brand-new players
   const isWaiting = roomData.status === 'WAITING' || (roomData.status as string) === 'waiting';
   if (!isWaiting) {
-    throw new Error('খেলাটি ইতিমধ্যে শুরু হয়ে গেছে (Game is already in progress)');
+    throw new Error('খেলাটি ইতিমধ্যে শুরু হয়ে গেছে (Game is already in progress. Rejoin within 30s allowed for existing players only.)');
   }
 
   if (existingPlayers.length >= (roomData.settings.maxPlayers || 10)) {
@@ -551,25 +573,33 @@ export async function leaveOnlineRoom(roomCode: string) {
         // Best effort
       }
     } else {
-      // Ordinary player leaving
-      await deleteDoc(playerRef);
+      // Ordinary player leaving: mark as disconnected/offline with 35s grace period (Requirement 8)
+      const now = Date.now();
+      await updateDoc(playerRef, {
+        connectionStatus: 'offline',
+        disconnectedAt: now,
+        canRejoinUntil: now + 35000,
+        lastSeenAt: now,
+      });
 
       const playersSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'players'));
-      const remainingPlayers = playersSnap.docs.map((d) => d.data() as OnlinePlayer);
+      const activePlayers = playersSnap.docs
+        .map((d) => d.data() as OnlinePlayer)
+        .filter((p) => p.connectionStatus === 'online');
 
-      if (remainingPlayers.length === 0) {
+      if (activePlayers.length === 0) {
         // RULE: If all players leave a room -> room status changes to CLOSED immediately!
         await updateDoc(roomRef, {
           status: 'CLOSED',
           closedReason: 'empty_room',
           playerCount: 0,
-          updatedAt: Date.now(),
+          updatedAt: now,
         });
       } else {
         await updateDoc(roomRef, {
-          playerCount: remainingPlayers.length,
-          lastActivityAt: Date.now(),
-          updatedAt: Date.now(),
+          playerCount: activePlayers.length,
+          lastActivityAt: now,
+          updatedAt: now,
         });
       }
     }
@@ -1072,12 +1102,13 @@ export async function advanceOnlineClueTurn(roomCode: string, timedOutPlayerId?:
   }
 }
 
-// Cast a vote
-export async function castOnlineVote(roomCode: string, suspectId: string) {
+// Cast a vote (Supports single or multiple suspects for 2 imposters)
+export async function castOnlineVote(roomCode: string, suspectInput: string | string[]) {
   const user = auth.currentUser;
   if (!user) return;
 
-  if (user.uid === suspectId) {
+  const suspects = Array.isArray(suspectInput) ? suspectInput : [suspectInput];
+  if (suspects.includes(user.uid)) {
     throw new Error('নিজেকে ভোট দেওয়া যাবে না (Cannot vote for yourself)');
   }
 
@@ -1088,13 +1119,14 @@ export async function castOnlineVote(roomCode: string, suspectId: string) {
 
   const voteData: OnlineVote = {
     voterId: user.uid,
-    suspectId,
+    suspectId: suspects[0] || '',
+    suspectIds: suspects,
     timestamp: now,
   };
 
   try {
     const batch = writeBatch(db);
-    batch.set(voteRef, voteData);
+    batch.set(voteRef, sanitizeForFirestore(voteData));
     batch.update(playerRef, { hasVoted: true, lastSeenAt: now });
     batch.update(roomRef, { lastActivityAt: now });
     await batch.commit();
@@ -1117,10 +1149,10 @@ export async function resolveOnlineVotingResults(roomCode: string) {
   const players = playersSnap.docs.map((d) => d.data() as OnlinePlayer);
 
   const votesSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'votes'));
-  const votesMap: Record<string, string> = {};
+  const votesMap: Record<string, string | string[]> = {};
   votesSnap.docs.forEach((d) => {
     const v = d.data() as OnlineVote;
-    votesMap[v.voterId] = v.suspectId;
+    votesMap[v.voterId] = v.suspectIds && v.suspectIds.length > 0 ? v.suspectIds : v.suspectId;
   });
 
   const secretWord = roomData.revealedWord;
@@ -1128,15 +1160,18 @@ export async function resolveOnlineVotingResults(roomCode: string) {
 
   if (!secretWord) return;
 
-  // Calculate vote count per player
+  // Calculate vote count per player (supporting 1 or 2 votes per player)
   const voteTally: Record<string, number> = {};
   players.forEach((p) => {
     voteTally[p.id] = 0;
   });
-  Object.values(votesMap).forEach((suspectId) => {
-    if (voteTally[suspectId] !== undefined) {
-      voteTally[suspectId]++;
-    }
+  Object.values(votesMap).forEach((suspectVal) => {
+    const list = Array.isArray(suspectVal) ? suspectVal : suspectVal ? [suspectVal] : [];
+    list.forEach((sId) => {
+      if (voteTally[sId] !== undefined) {
+        voteTally[sId]++;
+      }
+    });
   });
 
   // Find player(s) with highest votes
@@ -1195,7 +1230,8 @@ export async function resolveOnlineVotingResults(roomCode: string) {
 
   batch.update(roomRef, {
     currentPhase: nextPhase,
-    phaseEndsAt: shouldGuess ? now + 45000 : null,
+    // Requirement 7: Imposter reveal result page increased to 15s (15000ms)
+    phaseEndsAt: shouldGuess ? now + 45000 : now + 15000,
     eliminatedPlayerId: eliminatedId,
     revealedVotes: votesMap,
     scoreDetails: sanitizeForFirestore(scoreDetails),
@@ -1267,7 +1303,8 @@ export async function submitOnlineImposterGuess(
     imposterGuessAnswer: guess.trim(),
     winner: isCorrect ? 'imposter' : 'innocents',
     scoreDetails: sanitizeForFirestore(updatedScoreDetails),
-    phaseEndsAt: null,
+    // Requirement 7: Result reveal page time is 15s (15000ms)
+    phaseEndsAt: now + 15000,
     lastActivityAt: now,
     updatedAt: now,
   });

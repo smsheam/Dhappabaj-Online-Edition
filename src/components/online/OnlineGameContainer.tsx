@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   AlertTriangle,
   Clock,
@@ -9,6 +9,16 @@ import {
   WifiOff,
   Home,
   PlusCircle,
+  Music,
+  VolumeX,
+  BarChart2,
+  BookOpen,
+  Award,
+  CheckCircle,
+  ShieldCheck,
+  UserX,
+  X,
+  Trophy,
 } from 'lucide-react';
 import { Language, Theme } from '../../types/game';
 import {
@@ -17,6 +27,7 @@ import {
   PrivatePlayerRole,
   OnlineVote,
   RoomClosedReason,
+  OnlineGamePhase,
 } from '../../types/multiplayer';
 import {
   subscribeToOnlineRoom,
@@ -67,6 +78,18 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
   const [closedReason, setClosedReason] = useState<RoomClosedReason>(null);
   const [isConfirmingExit, setIsConfirmingExit] = useState<boolean>(false);
 
+  // Requirement 10: Background Music (BGM)
+  const [isBgmPlaying, setIsBgmPlaying] = useState<boolean>(true);
+
+  // Requirement 6: Persistent Score & Rule Drawer
+  const [isScoreRulesOpen, setIsScoreRulesOpen] = useState<boolean>(false);
+  const [drawerTab, setDrawerTab] = useState<'scores' | 'rules'>('scores');
+
+  // Requirement 3: 3-Second Transition Countdown
+  const [transitionCountdown, setTransitionCountdown] = useState<number | null>(null);
+  const [transitionPhaseInfo, setTransitionPhaseInfo] = useState<{ titleBn: string; titleEn: string; icon: string } | null>(null);
+  const prevPhaseRef = useRef<OnlineGamePhase>(initialRoom.currentPhase);
+
   // Countdown for host disconnect grace period
   const [hostDisconnectSecondsLeft, setHostDisconnectSecondsLeft] = useState<number | null>(null);
 
@@ -84,6 +107,73 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
   useEffect(() => {
     playersStateRef.current = players;
   }, [players]);
+
+  // Requirement 10: Auto-start procedural background music on match entry
+  useEffect(() => {
+    sound.startBackgroundMusic();
+    setIsBgmPlaying(sound.isBgmPlaying());
+
+    const handleFirstUserInteraction = () => {
+      sound.startBackgroundMusic();
+      setIsBgmPlaying(true);
+      window.removeEventListener('click', handleFirstUserInteraction);
+      window.removeEventListener('keydown', handleFirstUserInteraction);
+    };
+    window.addEventListener('click', handleFirstUserInteraction);
+    window.addEventListener('keydown', handleFirstUserInteraction);
+
+    return () => {
+      sound.stopBackgroundMusic();
+      window.removeEventListener('click', handleFirstUserInteraction);
+      window.removeEventListener('keydown', handleFirstUserInteraction);
+    };
+  }, []);
+
+  const handleToggleBgm = () => {
+    const active = sound.toggleBackgroundMusic();
+    setIsBgmPlaying(active);
+  };
+
+  // Requirement 3: 3-Second countdown & transition animation between stages
+  useEffect(() => {
+    if (prevPhaseRef.current !== room.currentPhase && room.currentPhase !== 'LOBBY') {
+      const phaseMetadata: Record<string, { titleBn: string; titleEn: string; icon: string }> = {
+        ROLE_REVEAL: { titleBn: 'গোপন কার্ড ও পরিচয় দর্শন', titleEn: 'Secret Role Reveal', icon: '🔒' },
+        CLUE: { titleBn: '১ম ধাপ: ক্রমানুসারে ক্লু প্রদান', titleEn: 'Stage 1: Clue Round', icon: '💬' },
+        DISCUSSION: { titleBn: '২য় ধাপ: সরাসরি আলোচনা ও জেরা', titleEn: 'Stage 2: Live Interrogation', icon: '🎙️' },
+        VOTING: { titleBn: '৩য় ধাপ: গোপন ভোটদান পর্ব', titleEn: 'Stage 3: Secret Voting', icon: '🗳️' },
+        IMPOSTER_GUESS: { titleBn: 'ধাপ্পাবাজের শেষ সুযোগ (শব্দ অনুমান)', titleEn: 'Imposter Final Guess', icon: '🎯' },
+        RESULT: { titleBn: 'চূড়ান্ত ফলাফল ও ধাপ্পাবাজ প্রকাশ', titleEn: 'Round Results Reveal', icon: '🕵️' },
+        ROUND_SUMMARY: { titleBn: 'ম্যাচ লিডারবোর্ড ও পয়েন্ট', titleEn: 'Match Standings', icon: '🏆' },
+        GAME_OVER: { titleBn: 'ম্যাচ সমাপ্তি ও চূড়ান্ত চ্যাম্পিয়ন', titleEn: 'Final Champions Podium', icon: '👑' },
+      };
+
+      const info = phaseMetadata[room.currentPhase] || { titleBn: 'পরবর্তী পর্ব', titleEn: 'Next Stage', icon: '✨' };
+      setTransitionPhaseInfo(info);
+      setTransitionCountdown(3);
+      sound.playCountdownTick(3);
+
+      let step = 3;
+      const interval = setInterval(() => {
+        step--;
+        if (step > 0) {
+          setTransitionCountdown(step);
+          sound.playCountdownTick(step);
+        } else if (step === 0) {
+          setTransitionCountdown(0);
+          sound.playTransitionWhoosh();
+        } else {
+          clearInterval(interval);
+          setTransitionCountdown(null);
+        }
+      }, 1000);
+
+      prevPhaseRef.current = room.currentPhase;
+      return () => clearInterval(interval);
+    } else {
+      prevPhaseRef.current = room.currentPhase;
+    }
+  }, [room.currentPhase]);
 
   // Real-time Firestore Subscriptions
   useEffect(() => {
@@ -308,21 +398,303 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
         </div>
       )}
 
-      {/* Floating Global Leave/Exit Button available in all active phases */}
+      {/* Requirement 6 & 10: Persistent Floating Status Bar during all active phases */}
       {room.currentPhase !== 'LOBBY' && (
-        <div className="fixed top-3 right-3 z-40">
-          <button
-            type="button"
-            onClick={() => {
-              sound.playClick();
-              setIsConfirmingExit(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-rose-500 text-white backdrop-blur-md border border-white/10 text-xs font-bold shadow-lg transition-all cursor-pointer"
-            title={isEn ? 'Exit Game' : 'খেলা থেকে বের হন'}
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{isEn ? 'Exit Room' : 'বের হন'}</span>
-          </button>
+        <div className="fixed top-2 inset-x-2 sm:inset-x-6 z-40 flex items-center justify-between gap-2 p-2 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 shadow-lg text-xs transition-all">
+          {/* Left: Player Profile & Live Score */}
+          <div className="flex items-center gap-2 min-w-0">
+            <div className={`w-7 h-7 rounded-lg ${currentPlayer.avatarColor || 'bg-amber-500'} flex items-center justify-center text-sm shrink-0`}>
+              {currentPlayer.avatar || '🕵️'}
+            </div>
+            <div className="min-w-0 flex items-center gap-1.5">
+              <span className="font-bold text-slate-800 dark:text-slate-200 truncate hidden xs:inline max-w-[80px]">
+                {currentPlayer.name}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-mono font-black text-[11px] bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400">
+                <span>⭐</span>
+                <span>{currentPlayer.score}</span>
+                <span className="text-[9px] font-normal">{isEn ? 'pts' : 'পয়েন্ট'}</span>
+              </span>
+            </div>
+          </div>
+
+          {/* Center: Match Round */}
+          <div className="hidden sm:flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 font-bold text-[11px] text-slate-700 dark:text-slate-300">
+            <span>{isEn ? `Round ${room.currentRound}/${room.totalRounds}` : `রাউন্ড ${room.currentRound}/${room.totalRounds}`}</span>
+          </div>
+
+          {/* Right: Quick Action Controls */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Score & Rules Button */}
+            <button
+              type="button"
+              onClick={() => {
+                sound.playClick();
+                setIsScoreRulesOpen(true);
+              }}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/25 font-bold text-[11px] cursor-pointer transition-colors"
+              title={isEn ? 'View Live Score & Rules' : 'লাইভ স্কোর ও নিয়মাবলী'}
+            >
+              <BarChart2 className="w-3.5 h-3.5" />
+              <span>{isEn ? 'Score & Rules' : 'স্কোর ও নিয়ম'}</span>
+            </button>
+
+            {/* BGM Toggle Button */}
+            <button
+              type="button"
+              onClick={() => {
+                sound.playClick();
+                handleToggleBgm();
+              }}
+              className={`p-1.5 rounded-xl border transition-colors cursor-pointer ${
+                isBgmPlaying
+                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400'
+              }`}
+              title={isBgmPlaying ? (isEn ? 'Mute Music' : 'মিউজিক বন্ধ করুন') : (isEn ? 'Play Music' : 'মিউজিক চালু করুন')}
+            >
+              {isBgmPlaying ? <Music className="w-3.5 h-3.5 text-emerald-500" /> : <VolumeX className="w-3.5 h-3.5" />}
+            </button>
+
+            {/* Exit Room Button */}
+            <button
+              type="button"
+              onClick={() => {
+                sound.playClick();
+                setIsConfirmingExit(true);
+              }}
+              className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+              title={isEn ? 'Exit Room' : 'রুম থেকে বের হন'}
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Requirement 3: 3-Second Transition Countdown Overlay */}
+      {transitionCountdown !== null && transitionPhaseInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="text-center space-y-4 max-w-sm w-full">
+            <div className="w-20 h-20 mx-auto rounded-3xl bg-amber-500/20 border-2 border-amber-500/50 flex items-center justify-center text-4xl shadow-2xl shadow-amber-500/25 animate-bounce">
+              {transitionPhaseInfo.icon}
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-xs uppercase tracking-widest font-extrabold text-amber-500">
+                {isEn ? 'Stage Transition' : 'পরবর্তী পর্ব প্রস্তুত হচ্ছে'}
+              </span>
+              <h2 className="text-xl sm:text-2xl font-black text-white">
+                {isEn ? transitionPhaseInfo.titleEn : transitionPhaseInfo.titleBn}
+              </h2>
+            </div>
+
+            {/* Glowing Countdown Number */}
+            <div className="flex items-center justify-center py-2">
+              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-amber-500 to-amber-600 text-slate-950 font-black text-5xl flex items-center justify-center shadow-2xl shadow-amber-500/50 animate-pulse border-4 border-amber-300">
+                {transitionCountdown === 0 ? (isEn ? 'GO!' : 'শুরু!') : transitionCountdown}
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-400">
+              {isEn ? 'Get ready for the next round action!' : 'পরবর্তী পর্বের জন্য প্রস্তুত হন!'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Requirement 6: Persistent Live Score & Rule Book Modal */}
+      {isScoreRulesOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-5 text-slate-800 dark:text-slate-100 flex flex-col max-h-[85vh]">
+            {/* Header & Tabs */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDrawerTab('scores')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    drawerTab === 'scores'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  {isEn ? '📊 Live Standings & Points' : '📊 বর্তমান পয়েন্ট ও স্কোর'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDrawerTab('rules')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    drawerTab === 'rules'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  {isEn ? '📜 Rules & Scoring Chart' : '📜 নিয়ম ও পয়েন্ট চার্ট'}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  sound.playClick();
+                  setIsScoreRulesOpen(false);
+                }}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="overflow-y-auto py-3 space-y-3 flex-1 text-xs">
+              {drawerTab === 'scores' ? (
+                /* Tab 1: Live Standings & Round Score Breakdown */
+                <div className="space-y-2.5">
+                  <div className="space-y-1.5">
+                    {players
+                      .slice()
+                      .sort((a, b) => b.score - a.score)
+                      .map((p, idx) => {
+                        const isMe = p.id === currentPlayer.id;
+                        return (
+                          <div
+                            key={p.id}
+                            className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
+                              isMe
+                                ? 'bg-amber-500/10 border-amber-500/40'
+                                : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-mono font-bold text-slate-400 w-4 text-center">
+                                #{idx + 1}
+                              </span>
+                              <span className="text-lg">{p.avatar || '🕵️'}</span>
+                              <div className="min-w-0">
+                                <span className="font-bold text-slate-900 dark:text-white truncate block">
+                                  {p.name} {isMe && (isEn ? '(You)' : '(আপনি)')}
+                                </span>
+                                <span className="text-[10px] text-slate-400 truncate block">
+                                  {isEn ? p.titleEn : p.titleBn}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="font-mono font-black text-amber-500 text-sm shrink-0">
+                              {p.score} {isEn ? 'pts' : 'পয়েন্ট'}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+
+                  {/* Previous round point reasons if available */}
+                  {room.scoreDetails && room.scoreDetails.length > 0 && (
+                    <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1.5">
+                      <div className="font-bold text-slate-700 dark:text-slate-300 text-[11px]">
+                        {isEn ? 'Last Round Score Breakdown:' : 'সর্বশেষ রাউন্ডের পয়েন্ট অর্জনের কারণ:'}
+                      </div>
+                      {room.scoreDetails.map((detail) => (
+                        <div key={detail.playerId} className="text-[11px] flex items-center justify-between border-b border-slate-200/50 dark:border-slate-800/50 pb-1 last:border-0">
+                          <span className="font-semibold text-slate-700 dark:text-slate-300">
+                            {detail.playerName}:
+                          </span>
+                          <span className={detail.pointsDelta >= 0 ? 'text-emerald-500 font-bold' : 'text-rose-500 font-bold'}>
+                            {detail.pointsDelta >= 0 ? `+${detail.pointsDelta}` : detail.pointsDelta} pts
+                            {detail.reasons && detail.reasons.length > 0 && (
+                              <span className="text-slate-400 font-normal ml-1">
+                                ({isEn ? detail.reasons[0].en : detail.reasons[0].bn})
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Tab 2: Compact Rules & Scoring Chart */
+                <div className="space-y-3">
+                  <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-1.5">
+                    <h4 className="font-bold text-amber-700 dark:text-amber-400 text-xs">
+                      {isEn ? '🎯 Quick Gameplay Guide' : '🎯 সংক্ষিপ্ত খেলার নিয়ম'}
+                    </h4>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                      {isEn
+                        ? '1. Role Reveal: View secret card. Citizens see word, Imposter sees clue only. 2. Clue Stage: Everyone gives 1 subtle clue in sequence. 3. Interrogation: Voice talk or chat. 4. Voting: Vote out suspected Imposter!'
+                        : '১. গোপন কার্ড: নাগরিকরা আসল শব্দ দেখেন, ধাপ্পাবাজ পায় কেবল ইঙ্গিত। ২. ক্লু পর্ব: ক্রমানুসারে সবাই ১টি ক্লু দেন। ৩. আলোচনা: চ্যাট বা মাইকে জেরা করুন। ৪. ভোটদান: ধাপ্পাবাজকে ভোট দিয়ে শনাক্ত করুন!'}
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
+                    <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs">
+                      {isEn ? '🏆 Point Scoring System' : '🏆 পয়েন্ট অর্জনের নিয়মাবলি'}
+                    </h4>
+                    <table className="w-full text-[11px] text-left">
+                      <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono">
+                        <tr>
+                          <td className="py-1 font-sans text-slate-600 dark:text-slate-300">
+                            {isEn ? 'Correct Imposter vote' : 'সঠিক ধাপ্পাবাজকে ভোট দেওয়া'}
+                          </td>
+                          <td className="py-1 text-right text-emerald-500 font-bold">+৪</td>
+                        </tr>
+                        <tr>
+                          <td className="py-1 font-sans text-slate-600 dark:text-slate-300">
+                            {isEn ? 'Mistaken suspect' : 'ভুল ব্যক্তিকে ভোট দেওয়া'}
+                          </td>
+                          <td className="py-1 text-right text-rose-500 font-bold">-১</td>
+                        </tr>
+                        <tr>
+                          <td className="py-1 font-sans text-slate-600 dark:text-slate-300">
+                            {isEn ? 'Framed innocent bonus' : 'নির্দোষ ফাঁসানোর বোনাস'}
+                          </td>
+                          <td className="py-1 text-right text-amber-500 font-bold">+৩</td>
+                        </tr>
+                        <tr>
+                          <td className="py-1 font-sans text-slate-600 dark:text-slate-300">
+                            {isEn ? 'Imposter survived undetected' : 'ধাপ্পাবাজ শনাক্ত না হয়ে টিকে থাকলে'}
+                          </td>
+                          <td className="py-1 text-right text-emerald-500 font-bold">+৫</td>
+                        </tr>
+                        <tr>
+                          <td className="py-1 font-sans text-slate-600 dark:text-slate-300">
+                            {isEn ? 'Imposter received 0 votes' : 'ধাপ্পাবাজ শূন্য ভোট পেলে বোনাস'}
+                          </td>
+                          <td className="py-1 text-right text-sky-500 font-bold">+৩</td>
+                        </tr>
+                        <tr>
+                          <td className="py-1 font-sans text-slate-600 dark:text-slate-300">
+                            {isEn ? 'Guessed secret word bonus' : 'সঠিক শব্দ অনুমান বোনাস'}
+                          </td>
+                          <td className="py-1 text-right text-purple-500 font-bold">+৩</td>
+                        </tr>
+                        <tr>
+                          <td className="py-1 font-sans text-slate-600 dark:text-slate-300">
+                            {isEn ? 'Caught unanimously by all' : 'সবার ভোটে ধাপ্পাবাজ ধরা পড়লে'}
+                          </td>
+                          <td className="py-1 text-right text-rose-500 font-bold">-২</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Close Button */}
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  sound.playClick();
+                  setIsScoreRulesOpen(false);
+                }}
+                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs cursor-pointer transition-colors"
+              >
+                {isEn ? 'Close & Return to Match' : 'বন্ধ করুন ও খেলায় ফিরুন'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

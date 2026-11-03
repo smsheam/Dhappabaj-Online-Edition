@@ -24,10 +24,28 @@ export const OnlineVotingScreen: React.FC<OnlineVotingScreenProps> = ({
   const isEn = lang === 'en';
   const isHost = currentPlayer.isHost;
 
-  const [selectedSuspectId, setSelectedSuspectId] = useState<string | null>(null);
+  const imposterCount = Math.min(room.settings.imposterCount || 1, players.length <= 4 ? 1 : 2);
+  const maxVotesAllowed = imposterCount;
+  const [selectedSuspectIds, setSelectedSuspectIds] = useState<string[]>([]);
   const [hasVoted, setHasVoted] = useState<boolean>(currentPlayer.hasVoted);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [resolving, setResolving] = useState<boolean>(false);
+
+  const handleToggleSuspect = (id: string) => {
+    sound.playClick();
+    if (maxVotesAllowed === 1) {
+      setSelectedSuspectIds([id]);
+    } else {
+      if (selectedSuspectIds.includes(id)) {
+        setSelectedSuspectIds(selectedSuspectIds.filter((item) => item !== id));
+      } else if (selectedSuspectIds.length < maxVotesAllowed) {
+        setSelectedSuspectIds([...selectedSuspectIds, id]);
+      } else {
+        // Rotate out first selected suspect
+        setSelectedSuspectIds([...selectedSuspectIds.slice(1), id]);
+      }
+    }
+  };
 
   // Synchronized Voting Timer (default 30s)
   const votingDuration = room.settings.votingTimer || 30;
@@ -71,11 +89,11 @@ export const OnlineVotingScreen: React.FC<OnlineVotingScreenProps> = ({
   }, [allVoted, resolving]);
 
   const handleCastVote = async () => {
-    if (!selectedSuspectId) return;
+    if (selectedSuspectIds.length === 0) return;
     setIsSubmitting(true);
     sound.playVoteCast();
     try {
-      await castOnlineVote(room.roomCode, selectedSuspectId);
+      await castOnlineVote(room.roomCode, selectedSuspectIds);
       setHasVoted(true);
     } catch (err) {
       console.error(err);
@@ -202,24 +220,32 @@ export const OnlineVotingScreen: React.FC<OnlineVotingScreenProps> = ({
           </div>
         ) : (
           <div className="space-y-2">
-            <div className="text-xs font-bold text-slate-700 dark:text-slate-300 px-1">
-              {isEn ? 'Select who you suspect is the Imposter:' : 'যাকে ধাপ্পাবাজ মনে করেন তাকে নির্বাচন করুন:'}
+            <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300 px-1">
+              <span>
+                {maxVotesAllowed > 1
+                  ? isEn
+                    ? `Vote for up to ${maxVotesAllowed} Imposters:`
+                    : `সর্বোচ্চ ${maxVotesAllowed} জন ধাপ্পাবাজ নির্বাচন করুন:`
+                  : isEn
+                  ? 'Select who you suspect is the Imposter:'
+                  : 'যাকে ধাপ্পাবাজ মনে করেন তাকে নির্বাচন করুন:'}
+              </span>
+              <span className="font-mono text-amber-600 dark:text-amber-400">
+                {selectedSuspectIds.length}/{maxVotesAllowed} {isEn ? 'Selected' : 'নির্বাচিত'}
+              </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[38vh] overflow-y-auto p-1">
               {players.map((p) => {
                 const isMe = p.id === currentPlayer.id;
-                const isSelected = selectedSuspectId === p.id;
+                const isSelected = selectedSuspectIds.includes(p.id);
 
                 return (
                   <button
                     type="button"
                     key={p.id}
                     disabled={isMe || hasVoted}
-                    onClick={() => {
-                      sound.playClick();
-                      setSelectedSuspectId(p.id);
-                    }}
+                    onClick={() => handleToggleSuspect(p.id)}
                     className={`p-3.5 rounded-2xl border text-left transition-all relative ${
                       isMe
                         ? 'bg-slate-100/40 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-50 cursor-not-allowed'
@@ -272,12 +298,16 @@ export const OnlineVotingScreen: React.FC<OnlineVotingScreenProps> = ({
         {!hasVoted && (
           <button
             type="button"
-            disabled={!selectedSuspectId || isSubmitting}
+            disabled={selectedSuspectIds.length === 0 || isSubmitting}
             onClick={handleCastVote}
             className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 text-white font-black text-base shadow-xl shadow-rose-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             <Vote className="w-5 h-5" />
-            <span>{isEn ? 'Confirm Secret Vote' : 'গোপন ভোট চূড়ান্ত করুন'}</span>
+            <span>
+              {isEn
+                ? `Confirm Secret Vote (${selectedSuspectIds.length}/${maxVotesAllowed})`
+                : `গোপন ভোট চূড়ান্ত করুন (${selectedSuspectIds.length}/${maxVotesAllowed})`}
+            </span>
           </button>
         )}
 

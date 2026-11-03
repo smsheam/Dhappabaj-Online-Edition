@@ -55,6 +55,8 @@ export interface OnlinePlayer {
   hasSeenCard?: boolean; // Track who confirmed viewing secret card
   clue?: string;
   connectionStatus: 'online' | 'offline';
+  disconnectedAt?: number | null; // Track accidental disconnect for 35s rejoin grace period
+  canRejoinUntil?: number | null;
   joinedAt: number;
   lastSeenAt: number;
 }
@@ -95,7 +97,7 @@ export interface OnlineRoomData {
   // Revealed round summary data (populated after voting/result phase)
   revealedWord?: WordItem | null;
   revealedImposterIds?: string[];
-  revealedVotes?: Record<string, string>; // voterId -> suspectId
+  revealedVotes?: Record<string, string | string[]>; // voterId -> suspectId or suspectIds
   scoreDetails?: RoundScoreDetail[];
   createdAt: number;
   updatedAt: number;
@@ -106,6 +108,7 @@ export interface OnlineRoomData {
 export interface OnlineVote {
   voterId: string;
   suspectId: string;
+  suspectIds?: string[]; // Multiple votes supported when 2 imposters
   timestamp: number;
 }
 

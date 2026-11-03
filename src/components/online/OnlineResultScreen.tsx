@@ -42,20 +42,30 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
   const isEliminatedImposter = eliminatedPlayer ? imposterIds.includes(eliminatedPlayer.id) : false;
   const isImposterWin = room.winner === 'imposter';
 
-  // Auto progression countdown to scoreboard (15s)
-  const [autoTimer, setAutoTimer] = useState<number>(15);
+  // Auto progression countdown to scoreboard (Requirement 7: exactly 15 seconds)
+  const [autoTimer, setAutoTimer] = useState<number>(() => {
+    if (room.phaseEndsAt) {
+      const remaining = Math.ceil((room.phaseEndsAt - Date.now()) / 1000);
+      return Math.max(1, Math.min(15, remaining));
+    }
+    return 15;
+  });
 
   useEffect(() => {
-    sound.playTada();
-    try {
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 },
-      });
-    } catch {
-      // Ignored if canvas not ready
-    }
+    sound.playSuspenseReveal();
+    const confettiTimer = setTimeout(() => {
+      try {
+        confetti({
+          particleCount: 70,
+          spread: 60,
+          origin: { y: 0.6 },
+        });
+      } catch {
+        // Ignored
+      }
+    }, 400);
+
+    return () => clearTimeout(confettiTimer);
   }, []);
 
   const handleProceedToScoreboard = async () => {

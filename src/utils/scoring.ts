@@ -3,7 +3,7 @@ import { Player, RoundScoreDetail, WordItem } from '../types/game';
 export interface ScoreCalculationInput {
   players: Player[];
   imposterIds: string[];
-  votes: Record<string, string>; // voterId -> suspectId
+  votes: Record<string, string | string[]>; // voterId -> suspectId or suspectIds
   word: WordItem;
   imposterGuessedWord?: boolean;
 }
@@ -20,39 +20,46 @@ export function calculateRoundScores({
     voteCountMap[p.id] = 0;
   });
 
-  Object.entries(votes).forEach(([, suspectId]) => {
-    if (voteCountMap[suspectId] !== undefined) {
-      voteCountMap[suspectId]++;
-    }
+  Object.entries(votes).forEach(([, suspect]) => {
+    const list = Array.isArray(suspect) ? suspect : suspect ? [suspect] : [];
+    list.forEach((sId) => {
+      if (voteCountMap[sId] !== undefined) {
+        voteCountMap[sId]++;
+      }
+    });
   });
 
   const totalInnocents = players.filter((p) => !imposterIds.includes(p.id)).length;
 
   return players.map((player) => {
     const isImposter = imposterIds.includes(player.id);
-    const votedForId = votes[player.id] || null;
+    const rawVote = votes[player.id];
+    const votedList = Array.isArray(rawVote) ? rawVote : rawVote ? [rawVote] : [];
+    const votedForId = votedList[0] || null;
     const votesReceived = voteCountMap[player.id] || 0;
     let pointsDelta = 0;
     const reasons: { bn: string; en: string }[] = [];
 
     if (!isImposter) {
-      // INNOCENT CITIZEN SCORING
-      if (votedForId) {
-        if (imposterIds.includes(votedForId)) {
-          // Correct vote on Imposter: +4
-          pointsDelta += 4;
-          reasons.push({
-            bn: 'সঠিক Imposter শনাক্ত (+৪)',
-            en: 'Correct Imposter vote (+4)',
-          });
-        } else {
-          // Practical penalty: -1 (fair deduction, prevents unfair negative score drops)
-          pointsDelta -= 1;
-          reasons.push({
-            bn: 'ভুল সন্দেহ (-১)',
-            en: 'Mistaken suspect (-1)',
-          });
-        }
+      // INNOCENT CITIZEN SCORING (Supports 1 or 2 votes)
+      if (votedList.length > 0) {
+        votedList.forEach((sId) => {
+          if (imposterIds.includes(sId)) {
+            // Correct vote on Imposter: +4
+            pointsDelta += 4;
+            reasons.push({
+              bn: 'সঠিক Imposter শনাক্ত (+৪)',
+              en: 'Correct Imposter vote (+4)',
+            });
+          } else {
+            // Practical penalty: -1
+            pointsDelta -= 1;
+            reasons.push({
+              bn: 'ভুল সন্দেহ (-১)',
+              en: 'Mistaken suspect (-1)',
+            });
+          }
+        });
       }
 
       // Framed Innocent Bonus: If framed by everyone else
@@ -66,7 +73,11 @@ export function calculateRoundScores({
     } else {
       // IMPOSTER SCORING
       const innocentVotesAgainstImposter = Object.entries(votes).filter(
-        ([voterId, suspectId]) => !imposterIds.includes(voterId) && suspectId === player.id
+        ([voterId, suspect]) => {
+          if (imposterIds.includes(voterId)) return false;
+          const list = Array.isArray(suspect) ? suspect : suspect ? [suspect] : [];
+          return list.includes(player.id);
+        }
       ).length;
 
       // Unanimously caught by all innocents
