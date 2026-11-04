@@ -567,19 +567,25 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
                         </tr>
                         <tr>
                           <td className="py-1 font-sans text-slate-600 dark:text-slate-300">
-                            {isEn ? 'Mistaken suspect' : 'ভুল ব্যক্তিকে ভোট দেওয়া'}
+                            {isEn ? 'Eliminated Imposter bonus' : 'ধাপ্পাবাজ বহিষ্কার বোনাস'}
+                          </td>
+                          <td className="py-1 text-right text-emerald-500 font-bold">+১</td>
+                        </tr>
+                        <tr>
+                          <td className="py-1 font-sans text-slate-600 dark:text-slate-300">
+                            {isEn ? 'Mistaken vote on Citizen' : 'নির্দোষকে ভুল ভোট দেওয়া'}
                           </td>
                           <td className="py-1 text-right text-rose-500 font-bold">-১</td>
                         </tr>
                         <tr>
                           <td className="py-1 font-sans text-slate-600 dark:text-slate-300">
-                            {isEn ? 'Framed innocent bonus' : 'নির্দোষ হওয়ায় পেয়েছে'}
+                            {isEn ? 'Wrongly eliminated Citizen bonus' : 'নির্দোষ বহিষ্কৃত হওয়ার সান্ত্বনা বোনাস'}
                           </td>
                           <td className="py-1 text-right text-amber-500 font-bold">+৩</td>
                         </tr>
                         <tr>
                           <td className="py-1 font-sans text-slate-600 dark:text-slate-300">
-                            {isEn ? 'Imposter survived undetected' : 'ধাপ্পাবাজ শনাক্ত না হয়ে টিকে থাকলে'}
+                            {isEn ? 'Imposter survived and won' : 'ধাপ্পাবাজ জয়ী হলে'}
                           </td>
                           <td className="py-1 text-right text-emerald-500 font-bold">+৫</td>
                         </tr>
@@ -591,15 +597,9 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
                         </tr>
                         <tr>
                           <td className="py-1 font-sans text-slate-600 dark:text-slate-300">
-                            {isEn ? 'Guessed secret word bonus' : 'সঠিক শব্দ অনুমান বোনাস'}
+                            {isEn ? 'Imposter caught / eliminated' : 'ধাপ্পাবাজ ধরা পড়লে বা হারলে'}
                           </td>
-                          <td className="py-1 text-right text-purple-500 font-bold">+৩</td>
-                        </tr>
-                        <tr>
-                          <td className="py-1 font-sans text-slate-600 dark:text-slate-300">
-                            {isEn ? 'Caught unanimously by all' : 'সবার ভোটে ধাপ্পাবাজ ধরা পড়লে'}
-                          </td>
-                          <td className="py-1 text-right text-rose-500 font-bold">-২</td>
+                          <td className="py-1 text-right text-slate-400 font-bold">০</td>
                         </tr>
                       </tbody>
                     </table>

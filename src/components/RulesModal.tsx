@@ -88,24 +88,28 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose, lang })
                       <td className="py-1 text-right text-emerald-600 dark:text-emerald-400 font-bold">+4 pts</td>
                     </tr>
                     <tr>
-                      <td className="py-1 font-sans">Mistaken vote on innocent</td>
+                      <td className="py-1 font-sans">Eliminated Imposter bonus</td>
+                      <td className="py-1 text-right text-emerald-600 dark:text-emerald-400 font-bold">+1 pt</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1 font-sans">Mistaken vote on Citizen</td>
                       <td className="py-1 text-right text-rose-600 dark:text-rose-400 font-bold">-1 pt</td>
                     </tr>
                     <tr>
-                      <td className="py-1 font-sans">Imposter survived undetected</td>
-                      <td className="py-1 text-right text-amber-600 dark:text-amber-400 font-bold">Imposter +5</td>
+                      <td className="py-1 font-sans">Wrongly eliminated Citizen bonus</td>
+                      <td className="py-1 text-right text-amber-600 dark:text-amber-400 font-bold">+3 pts</td>
                     </tr>
                     <tr>
-                      <td className="py-1 font-sans">Imposter received 0 votes</td>
+                      <td className="py-1 font-sans">Imposter survived & won</td>
+                      <td className="py-1 text-right text-amber-600 dark:text-amber-400 font-bold">+5 pts</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1 font-sans">Imposter won with 0 votes bonus</td>
                       <td className="py-1 text-right text-sky-600 dark:text-sky-400 font-bold">+3 Bonus</td>
                     </tr>
                     <tr>
-                      <td className="py-1 font-sans">Imposter guessed secret word</td>
-                      <td className="py-1 text-right text-purple-600 dark:text-purple-400 font-bold">+3 Bonus</td>
-                    </tr>
-                    <tr>
-                      <td className="py-1 font-sans">Imposter caught unanimously</td>
-                      <td className="py-1 text-right text-rose-600 dark:text-rose-400 font-bold">Imposter -2</td>
+                      <td className="py-1 font-sans">Imposter caught & eliminated</td>
+                      <td className="py-1 text-right text-slate-500 font-bold">0 pts</td>
                     </tr>
                   </tbody>
                 </table>
@@ -151,28 +155,32 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose, lang })
                 <table className="w-full text-xs text-left">
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-850 font-mono">
                     <tr>
-                      <td className="py-1 font-sans">সঠিক Imposter-কে ভোট দেওয়া</td>
+                      <td className="py-1 font-sans">সঠিক ধাপ্পাবাজকে ভোট দেওয়া</td>
                       <td className="py-1 text-right text-emerald-600 dark:text-emerald-400 font-bold">+৪</td>
                     </tr>
                     <tr>
-                      <td className="py-1 font-sans">ভুল ব্যক্তিকে ভোট দেওয়া</td>
+                      <td className="py-1 font-sans">ধাপ্পাবাজ বহিষ্কার বোনাস</td>
+                      <td className="py-1 text-right text-emerald-600 dark:text-emerald-400 font-bold">+১</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1 font-sans">নির্দোষকে ভুল ভোট দেওয়া</td>
                       <td className="py-1 text-right text-rose-600 dark:text-rose-400 font-bold">-১</td>
                     </tr>
                     <tr>
-                      <td className="py-1 font-sans">Imposter শনাক্ত না হওয়া</td>
-                      <td className="py-1 text-right text-amber-600 dark:text-amber-400 font-bold">Imposter +৫</td>
+                      <td className="py-1 font-sans">নির্দোষ বহিষ্কৃত হওয়ার সান্ত্বনা বোনাস</td>
+                      <td className="py-1 text-right text-amber-600 dark:text-amber-400 font-bold">+৩</td>
                     </tr>
                     <tr>
-                      <td className="py-1 font-sans">Imposter কোনো ভোট না পাওয়া</td>
-                      <td className="py-1 text-right text-sky-600 dark:text-sky-400 font-bold">Imposter +৩ বোনাস</td>
+                      <td className="py-1 font-sans">ধাপ্পাবাজ জয়ী হলে</td>
+                      <td className="py-1 text-right text-amber-600 dark:text-amber-400 font-bold">+৫</td>
                     </tr>
                     <tr>
-                      <td className="py-1 font-sans">Imposter সঠিক শব্দ অনুমান করা</td>
-                      <td className="py-1 text-right text-purple-600 dark:text-purple-400 font-bold">Imposter +৩ বোনাস</td>
+                      <td className="py-1 font-sans">ধাপ্পাবাজ কোনো ভোট না পাওয়ার বোনাস</td>
+                      <td className="py-1 text-right text-sky-600 dark:text-sky-400 font-bold">+৩ বোনাস</td>
                     </tr>
                     <tr>
-                      <td className="py-1 font-sans">Imposter সবার ভোটে শনাক্ত হওয়া</td>
-                      <td className="py-1 text-right text-rose-600 dark:text-rose-400 font-bold">Imposter -২</td>
+                      <td className="py-1 font-sans">ধাপ্পাবাজ ধরা পড়লে / হারলে</td>
+                      <td className="py-1 text-right text-slate-500 font-bold">০ পয়েন্ট</td>
                     </tr>
                   </tbody>
                 </table>

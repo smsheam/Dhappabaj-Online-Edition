@@ -3,16 +3,71 @@ import { WORDS_FOOD } from './wordsFood';
 import { WORDS_PEOPLE } from './wordsPeople';
 import { WORDS_OBJECT } from './wordsObject';
 import { WORDS_ANIMAL } from './wordsAnimal';
+import { WORDS_SCHOOL } from './words/wordsSchool';
+import { WORDS_SPORTS } from './words/wordsSports';
+import { WORDS_LIFESTYLE } from './words/wordsLifestyle';
+import { WORDS_HISTORICAL } from './words/wordsHistorical';
+import { WORDS_TOURIST } from './words/wordsTourist';
+import { WORDS_TECH } from './words/wordsTech';
+import { WORDS_MOVIES } from './words/wordsMovies';
+import { WORDS_GEOGRAPHY } from './words/wordsGeography';
+import { WORDS_PROFESSIONS } from './words/wordsProfessions';
+import { WORDS_NATURE } from './words/wordsNature';
+import { WORDS_TRANSPORT } from './words/wordsTransport';
+import { WORDS_FESTIVALS } from './words/wordsFestivals';
+import { WORDS_ACTIVITIES } from './words/wordsActivities';
+import { WORDS_SCIENCE } from './words/wordsScience';
+import { WORDS_CLOTHING } from './words/wordsClothing';
+import { WORDS_LANDMARKS } from './words/wordsLandmarks';
+
+export {
+  WORDS_FOOD,
+  WORDS_PEOPLE,
+  WORDS_OBJECT,
+  WORDS_ANIMAL,
+  WORDS_SCHOOL,
+  WORDS_SPORTS,
+  WORDS_LIFESTYLE,
+  WORDS_HISTORICAL,
+  WORDS_TOURIST,
+  WORDS_TECH,
+  WORDS_MOVIES,
+  WORDS_GEOGRAPHY,
+  WORDS_PROFESSIONS,
+  WORDS_NATURE,
+  WORDS_TRANSPORT,
+  WORDS_FESTIVALS,
+  WORDS_ACTIVITIES,
+  WORDS_SCIENCE,
+  WORDS_CLOTHING,
+  WORDS_LANDMARKS,
+};
 
 export const ALL_WORDS: WordItem[] = [
   ...WORDS_FOOD,
   ...WORDS_PEOPLE,
   ...WORDS_OBJECT,
   ...WORDS_ANIMAL,
+  ...WORDS_SCHOOL,
+  ...WORDS_SPORTS,
+  ...WORDS_LIFESTYLE,
+  ...WORDS_HISTORICAL,
+  ...WORDS_TOURIST,
+  ...WORDS_TECH,
+  ...WORDS_MOVIES,
+  ...WORDS_GEOGRAPHY,
+  ...WORDS_PROFESSIONS,
+  ...WORDS_NATURE,
+  ...WORDS_TRANSPORT,
+  ...WORDS_FESTIVALS,
+  ...WORDS_ACTIVITIES,
+  ...WORDS_SCIENCE,
+  ...WORDS_CLOTHING,
+  ...WORDS_LANDMARKS,
 ];
 
-const GLOBAL_WORD_HISTORY_KEY = 'dhappabaj_global_word_history_v2';
-const MAX_RECENT_HISTORY = 380; // Keep history of up to 380 words so all 480 words rotate through without repetition
+const GLOBAL_WORD_HISTORY_KEY = 'dhappabaj_global_word_history_v3';
+const MAX_RECENT_HISTORY = 2400; // Keep history of up to 2,400 words so 3,000 words rotate smoothly without repetition
 
 function getGlobalHistory(): number[] {
   try {
@@ -81,12 +136,11 @@ export function pickRandomWord(usedWordIds: number[] = [], allowedCategories?: C
       unusedInMatch.sort((a, b) => {
         const idxA = globalHistory.indexOf(a.id);
         const idxB = globalHistory.indexOf(b.id);
-        // Words with index -1 or larger index in history were played longer ago
         const rankA = idxA === -1 ? 999999 : idxA;
         const rankB = idxB === -1 ? 999999 : idxB;
         return rankB - rankA;
       });
-      // Pick randomly from the top 30% oldest words to maintain randomization
+      // Pick randomly from the top 35% oldest words to maintain randomization
       const topSliceCount = Math.max(1, Math.floor(unusedInMatch.length * 0.35));
       const pool = unusedInMatch.slice(0, topSliceCount);
       chosenWord = pool[getSecureRandomIndex(pool.length)];
@@ -108,5 +162,21 @@ export function getWordCountStats() {
     people: WORDS_PEOPLE.length,
     object: WORDS_OBJECT.length,
     animal: WORDS_ANIMAL.length,
+    school_life: WORDS_SCHOOL.length,
+    sports: WORDS_SPORTS.length,
+    lifestyle: WORDS_LIFESTYLE.length,
+    historical_places: WORDS_HISTORICAL.length,
+    bd_tourist: WORDS_TOURIST.length,
+    tech: WORDS_TECH.length,
+    movies: WORDS_MOVIES.length,
+    geography: WORDS_GEOGRAPHY.length,
+    professions: WORDS_PROFESSIONS.length,
+    nature: WORDS_NATURE.length,
+    transport: WORDS_TRANSPORT.length,
+    festivals: WORDS_FESTIVALS.length,
+    everyday_activities: WORDS_ACTIVITIES.length,
+    science: WORDS_SCIENCE.length,
+    clothing: WORDS_CLOTHING.length,
+    landmarks: WORDS_LANDMARKS.length,
   };
 }

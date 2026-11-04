@@ -124,6 +124,7 @@ import { WordItem, CategoryId } from '../types/game';
 import { pickRandomWord, ALL_WORDS } from '../data/words';
 import { calculateRoundScores } from '../utils/scoring';
 import { generatePlayerTitles, SCENE_PACKS } from '../data/titles';
+import { getSmartGuessChoices } from '../data/wordClusters';
 
 const ROOM_CODE_CHARACTERS = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const CODE_LENGTH = 6;
@@ -857,13 +858,43 @@ export async function startOnlineRound(roomCode: string, roundNumber: number = 1
 
   // Pick random word
   const categories = roomData.settings.selectedCategories || ['food', 'people', 'object', 'animal'];
-  const prevUsedIds = roomData.usedWordIds || [];
+  const isNewMatch = roundNumber === 1;
+  const matchId = isNewMatch
+    ? `m_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+    : roomData.currentMatchId || `m_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+  const prevUsedIds = isNewMatch ? [] : (roomData.usedWordIds || []);
   const word = pickRandomWord(prevUsedIds, categories);
 
-  // Assign imposter(s)
+  // Imposter assignment limit rule (Max 2 times per match)
   const imposterCount = Math.min(roomData.settings.imposterCount || 1, players.length <= 4 ? 1 : 2);
-  const shuffledPlayers = [...players].sort(() => 0.5 - Math.random());
-  const assignedImposterIds = shuffledPlayers.slice(0, imposterCount).map((p) => p.id);
+  const currentImposterCounts: Record<string, number> = isNewMatch ? {} : { ...(roomData.imposterCounts || {}) };
+
+  // Filter candidates who have been imposter strictly fewer than 2 times in this match
+  const eligibleCandidates = players.filter((p) => (currentImposterCounts[p.id] || 0) < 2);
+
+  let assignedImposterIds: string[] = [];
+  if (eligibleCandidates.length >= imposterCount) {
+    const shuffled = [...eligibleCandidates].sort(() => 0.5 - Math.random());
+    assignedImposterIds = shuffled.slice(0, imposterCount).map((p) => p.id);
+  } else {
+    // Fallback: pick all eligible first, then fill with players who have fewest imposter assignments
+    const pickedSet = new Set<string>(eligibleCandidates.map((p) => p.id));
+    const remainder = players
+      .filter((p) => !pickedSet.has(p.id))
+      .sort((a, b) => {
+        const countDiff = (currentImposterCounts[a.id] || 0) - (currentImposterCounts[b.id] || 0);
+        return countDiff !== 0 ? countDiff : 0.5 - Math.random();
+      });
+    const pool = [...eligibleCandidates, ...remainder];
+    assignedImposterIds = pool.slice(0, imposterCount).map((p) => p.id);
+  }
+
+  // Update imposter counts
+  const updatedImposterCounts: Record<string, number> = { ...currentImposterCounts };
+  assignedImposterIds.forEach((impId) => {
+    updatedImposterCounts[impId] = (updatedImposterCounts[impId] || 0) + 1;
+  });
 
   // Batch write private role cards
   const batch = writeBatch(db);
@@ -900,13 +931,17 @@ export async function startOnlineRound(roomCode: string, roundNumber: number = 1
       batch.set(privateRef, sanitizeForFirestore(innocentData));
     }
 
-    // Reset player round flags
+    // Reset player round flags & reset score to 0 if starting a new match!
     const playerRef = doc(db, 'rooms', roomCode, 'players', p.id);
-    batch.update(playerRef, {
+    const playerUpdates: Record<string, any> = {
       hasVoted: false,
       clue: '',
       hasSeenCard: false,
-    });
+    };
+    if (isNewMatch) {
+      playerUpdates.score = 0; // Fresh match starts at 0 for every player
+    }
+    batch.update(playerRef, playerUpdates);
   });
 
   // Delete previous votes if any
@@ -951,6 +986,9 @@ export async function startOnlineRound(roomCode: string, roundNumber: number = 1
     revealedImposterIds: assignedImposterIds,
     revealedVotes: {},
     scoreDetails: [],
+    currentMatchId: matchId,
+    imposterCounts: updatedImposterCounts,
+    nextRoundConfirmed: [],
     lastActivityAt: now,
     updatedAt: now,
   });
@@ -1367,13 +1405,58 @@ export async function submitOnlineImposterGuess(
   await batch.commit();
 }
 
-// Generate 4 multiple choice options for imposter guess
+// Generate 4 multiple choice options for imposter guess with closely related words
 export function generateGuessChoices(correctWord: WordItem, category: CategoryId): WordItem[] {
-  const categoryPool = ALL_WORDS.filter((w) => w.category === category && w.id !== correctWord.id);
-  const shuffled = [...categoryPool].sort(() => 0.5 - Math.random()).slice(0, 3);
-  const choices = [correctWord, ...shuffled].sort(() => 0.5 - Math.random());
-  return choices;
+  return getSmartGuessChoices(correctWord, category);
 }
+
+// Every player confirms next round; when all connected players confirm, next round starts automatically
+export async function confirmOnlineNextRound(roomCode: string, playerId: string) {
+  const roomRef = doc(db, 'rooms', roomCode);
+  const roomSnap = await safeGetDoc(roomRef);
+  if (!roomSnap.exists()) return;
+  const roomData = roomSnap.data() as OnlineRoomData;
+
+  const currentConfirmed = roomData.nextRoundConfirmed || [];
+  if (currentConfirmed.includes(playerId)) return;
+
+  const updatedConfirmed = [...currentConfirmed, playerId];
+
+  // Get active online players
+  const playersSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'players'));
+  const allPlayers = playersSnap.docs.map((d) => d.data() as OnlinePlayer);
+  const activePlayers = allPlayers.filter((p) => p.connectionStatus !== 'offline');
+  const targetPlayers = activePlayers.length > 0 ? activePlayers : allPlayers;
+
+  // Check if all connected players confirmed
+  const isAllConfirmed = targetPlayers.every((p) => updatedConfirmed.includes(p.id));
+
+  if (isAllConfirmed) {
+    // All players confirmed! Advance to next round or game over
+    if (roomData.currentRound >= roomData.totalRounds) {
+      await updateDoc(roomRef, {
+        nextRoundConfirmed: [],
+        currentPhase: 'GAME_OVER',
+        lastActivityAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    } else {
+      await updateDoc(roomRef, {
+        nextRoundConfirmed: [],
+        lastActivityAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      await startOnlineRound(roomCode, roomData.currentRound + 1);
+    }
+  } else {
+    await updateDoc(roomRef, {
+      nextRoundConfirmed: updatedConfirmed,
+      lastActivityAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+  }
+}
+
 
 // Subscriptions
 export function subscribeToOnlineRoom(

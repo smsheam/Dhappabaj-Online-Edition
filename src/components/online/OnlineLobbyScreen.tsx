@@ -723,10 +723,10 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
                 </div>
               </div>
 
-              {/* Discussion Timer (60, 90, 120, 150s / 2.30m) */}
+              {/* Discussion Timer (60, 90, 120, 150 sec) */}
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
-                  {isEn ? 'Discussion Time (Max 2.30 min)' : 'আলোচনার সময় (সর্বোচ্চ ২.৩০ মিনিট)'}
+                  {isEn ? 'Discussion Time (Max 150 sec)' : 'আলোচনার সময় (সর্বোচ্চ ১৫০ সেকেন্ড)'}
                 </label>
                 <div className="grid grid-cols-4 gap-2">
                   {[60, 90, 120, 150].map((sec) => (
@@ -740,7 +740,7 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                       }`}
                     >
-                      {sec === 150 ? (isEn ? '150s (2.3m)' : '১৫০সে (২.৩মি)') : `${sec}s`}
+                      {sec}s
                     </button>
                   ))}
                 </div>

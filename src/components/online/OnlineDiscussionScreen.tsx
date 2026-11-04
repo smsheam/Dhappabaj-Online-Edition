@@ -193,16 +193,16 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
           </div>
         </div>
 
-        {/* Countdown Pill */}
+        {/* Countdown Pill in Seconds */}
         <div
-          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-2xl font-mono text-lg sm:text-xl font-black border transition-all ${
+          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-2xl font-mono text-base sm:text-lg font-black border transition-all ${
             timeLeft <= 10
               ? 'bg-rose-500/20 border-rose-500 text-rose-600 dark:text-rose-400 animate-pulse'
               : 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400'
           }`}
         >
           <Clock className="w-4 h-4" />
-          <span>{formattedTime}</span>
+          <span>{timeLeft} sec</span>
         </div>
       </div>
 

@@ -98,9 +98,11 @@ export interface OnlineRoomData {
   revealedWord?: WordItem | null;
   revealedImposterIds?: string[];
   revealedVotes?: Record<string, string | string[]>; // voterId -> suspectId or suspectIds
+  scoreDetails?: RoundScoreDetail[];
   currentMatchId?: string; // Unique match/session ID for score reset per new match
   imposterCounts?: Record<string, number>; // playerId -> count of imposter assignments in current match (max 2)
   matchScores?: Record<string, number>; // playerId -> current match score
+  nextRoundConfirmed?: string[]; // playerIds who confirmed ready to proceed to next round
   createdAt: number;
   updatedAt: number;
   lastActivityAt: number; // 5 min inactivity tracking

@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
-import { Trophy, RotateCcw, Home, Crown, Sparkles } from 'lucide-react';
+import { Trophy, RotateCcw, Home, Crown, Sparkles, AlertTriangle } from 'lucide-react';
 import { Language, Theme } from '../../types/game';
 import { OnlinePlayer, OnlineRoomData } from '../../types/multiplayer';
 import { setOnlineRoomPhase } from '../../services/multiplayerService';
@@ -24,6 +24,7 @@ export const OnlineGameOverScreen: React.FC<OnlineGameOverScreenProps> = ({
 }) => {
   const isEn = lang === 'en';
   const isHost = currentPlayer.isHost;
+  const [showExitWarning, setShowExitWarning] = useState<boolean>(false);
 
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
   const champion = sortedPlayers[0];
@@ -57,13 +58,29 @@ export const OnlineGameOverScreen: React.FC<OnlineGameOverScreenProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between p-4 sm:p-8 max-w-2xl mx-auto transition-colors duration-200">
-      {/* Top Banner */}
-      <div className="text-center space-y-1">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between p-4 sm:p-8 max-w-2xl mx-auto transition-colors duration-200 relative">
+      {/* Top Banner with Top-Right Exit */}
+      <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400">
           <Trophy className="w-3.5 h-3.5" />
           <span>{isEn ? 'Match Concluded!' : 'খেলা সমাপ্ত!'}</span>
         </div>
+
+        {/* Top-Right Exit Button */}
+        <button
+          type="button"
+          onClick={() => {
+            sound.playClick();
+            setShowExitWarning(true);
+          }}
+          className="p-2 rounded-xl bg-slate-100 hover:bg-rose-500 hover:text-white dark:bg-slate-800 dark:hover:bg-rose-600 text-slate-500 dark:text-slate-400 transition-colors cursor-pointer border border-slate-200 dark:border-slate-700/60"
+          title={isEn ? 'Exit to Main Menu' : 'মূল মেন্যুতে ফিরে যান'}
+        >
+          <Home className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="text-center pt-2 space-y-1">
         <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
           {isEn ? 'Tournament Champions' : 'ধাপ্পাবাজ চ্যাম্পিয়নশিপ'}
         </h2>
@@ -135,22 +152,55 @@ export const OnlineGameOverScreen: React.FC<OnlineGameOverScreenProps> = ({
           <button
             type="button"
             onClick={handlePlayAgain}
-            className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-lg shadow-xl shadow-amber-500/25 flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-lg shadow-xl shadow-amber-500/25 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
           >
             <RotateCcw className="w-5 h-5" />
             <span>{isEn ? 'Play Again in this Room' : 'এই রুমে আবার খেলুন'}</span>
           </button>
         )}
-
-        <button
-          type="button"
-          onClick={onExitToMenu}
-          className="w-full py-3 rounded-2xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-300 dark:hover:bg-slate-700"
-        >
-          <Home className="w-4 h-4" />
-          <span>{isEn ? 'Return to Home Menu' : 'মূল মেন্যুতে ফিরে যান'}</span>
-        </button>
       </div>
+
+      {/* Exit Warning Dialog Modal */}
+      {showExitWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-500 flex items-center justify-center text-xl">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                {isEn ? 'Leave Match?' : 'খেলা ছেড়ে যেতে চান?'}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {isEn
+                  ? 'Are you sure you want to return to the main menu?'
+                  : 'আপনি কি নিশ্চিত যে খেলা ছেড়ে মূল মেন্যুতে ফিরে যেতে চান?'}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowExitWarning(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs cursor-pointer"
+              >
+                {isEn ? 'Stay Here' : 'না, এখানে থাকুন'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowExitWarning(false);
+                  onExitToMenu();
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-black text-xs cursor-pointer shadow-md shadow-rose-500/20"
+              >
+                {isEn ? 'Yes, Exit' : 'হ্যাঁ, বের হন'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
