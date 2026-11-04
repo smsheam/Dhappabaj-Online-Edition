@@ -61,15 +61,15 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [starting, setStarting] = useState<boolean>(false);
 
-  // Requirement 1: Lobby live chat & emoji sharing
+  // Optimized: Lobby Quick Chat (last 3 messages, 5s cooldown)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState<string>('');
   const [isChatOpen, setIsChatOpen] = useState<boolean>(true);
+  const [cooldownSeconds, setCooldownSeconds] = useState<number>(0);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const unsub = subscribeToChatMessages(room.roomCode, (messages) => {
-      setChatMessages(messages);
+      setChatMessages(messages.slice(-3));
     });
     return () => unsub();
   }, [room.roomCode]);
@@ -80,18 +80,23 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
     }
   }, [chatMessages]);
 
-  const handleSendLobbyMessage = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!chatInput.trim()) return;
-    const text = chatInput.trim();
-    setChatInput('');
-    sound.playClick();
-    await sendOnlineChatMessage(room.roomCode, currentPlayer, text);
-  };
+  // 5-second cooldown timer
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+    const interval = setInterval(() => {
+      setCooldownSeconds((prev) => (prev > 1 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [cooldownSeconds]);
 
   const handleSendQuickReaction = async (phrase: string) => {
+    if (cooldownSeconds > 0) return;
     sound.playClick();
-    await sendOnlineChatMessage(room.roomCode, currentPlayer, phrase);
+    setCooldownSeconds(5);
+    const result = await sendOnlineChatMessage(room.roomCode, currentPlayer, phrase);
+    if (!result.success && result.cooldownRemaining) {
+      setCooldownSeconds(result.cooldownRemaining);
+    }
   };
 
   const [tempSettings, setTempSettings] = useState<RoomSettings>({ ...room.settings });
@@ -347,7 +352,7 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
 
                   {/* Status & Actions */}
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {p.connectionStatus === 'offline' || (Date.now() - p.lastSeenAt > 35000) ? (
+                    {p.connectionStatus === 'offline' || (Date.now() - p.lastSeenAt > 55000) ? (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30">
                         {isEn ? 'Offline' : 'বিচ্ছিন্ন'}
                       </span>
@@ -388,35 +393,43 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
         </div>
       </div>
 
-      {/* Requirement 1: Lobby Live Chat & Quick Bangla Reactions */}
+      {/* Optimized: Lobby Quick Chat (Last 3 messages, 5s cooldown) */}
       <div className="mb-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 shadow-xs space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
             <MessageSquare className="w-3.5 h-3.5 text-amber-500" />
-            <span>{isEn ? 'Lobby Live Chat & Reactions' : 'লবি লাইভ চ্যাট ও রিঅ্যাকশন'}</span>
+            <span>{isEn ? 'Lobby Quick Chat' : 'লবি কুইক চ্যাট'}</span>
             <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-mono">
-              {chatMessages.length}
+              {chatMessages.length}/3
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsChatOpen(!isChatOpen)}
-            className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
-          >
-            {isChatOpen ? (isEn ? 'Minimize' : 'ছোট করুন') : (isEn ? 'Expand' : 'খুলুন')}
-          </button>
+
+          <div className="flex items-center gap-2">
+            {cooldownSeconds > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 text-[10px] font-bold animate-pulse">
+                {isEn ? `Wait ${cooldownSeconds}s` : `অপেক্ষা করুন ${cooldownSeconds} সে.`}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setIsChatOpen(!isChatOpen)}
+              className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
+            >
+              {isChatOpen ? (isEn ? 'Minimize' : 'ছোট করুন') : (isEn ? 'Expand' : 'খুলুন')}
+            </button>
+          </div>
         </div>
 
         {isChatOpen && (
           <div className="space-y-2 pt-1 border-t border-slate-100 dark:border-slate-800/80">
-            {/* Messages Scroll Area */}
-            <div className="h-28 overflow-y-auto space-y-1.5 p-1 bg-slate-50 dark:bg-slate-950/70 rounded-xl text-xs">
+            {/* Messages Scroll Area - Strictly displays up to 3 messages */}
+            <div className="h-24 overflow-y-auto space-y-1.5 p-1 bg-slate-50 dark:bg-slate-950/70 rounded-xl text-xs">
               {chatMessages.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-[11px] text-slate-400">
-                  {isEn ? 'Say hello or tap an emoji while waiting!' : 'অপেক্ষা করার সময় হাই বলুন বা ইমোজি দিন!'}
+                  {isEn ? 'Tap a reaction below while waiting!' : 'অপেক্ষা করার সময় নিচের বাটনে ট্যাপ করুন!'}
                 </div>
               ) : (
-                chatMessages.map((msg) => {
+                chatMessages.slice(-3).map((msg) => {
                   const isMine = msg.senderId === currentPlayer.id;
                   return (
                     <div
@@ -444,59 +457,55 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
             </div>
 
             {/* Quick Emoji Reaction Buttons */}
-            <div className="flex items-center gap-1 overflow-x-auto py-1">
+            <div className="flex items-center gap-1 overflow-x-auto py-1 no-scrollbar">
               {['😂', '🤫', '👀', '🔥', '💀', '🕵️', '🤡', '🎯'].map((emoji) => (
                 <button
                   type="button"
                   key={emoji}
+                  disabled={cooldownSeconds > 0}
                   onClick={() => handleSendQuickReaction(emoji)}
-                  className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-amber-500/20 text-sm transition-all cursor-pointer shrink-0"
+                  className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-amber-500/20 text-sm transition-all cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed active:scale-90"
                 >
                   {emoji}
                 </button>
               ))}
             </div>
 
-            {/* Quick Bangla Chats */}
+            {/* Quick Bangla / English Phrases */}
             <div className="flex gap-1.5 overflow-x-auto py-0.5 no-scrollbar">
-              {[
-                'দেরি কেন? খেলা শুরু করো! 🚀',
-                'আজকে আমি ধাপ্পাবাজ হব! 😈',
-                'কে ধাপ্পাবাজ হবে আজ? 🕵️',
-                'আমি কিন্তু একদম খাঁটি মানুষ! 😇',
-                'সবাই রেডি তো? ⏳',
-                'ধাপ্পাবাজ ধরা খেলে খবর আছে! 💀',
-              ].map((phrase) => (
+              {(isEn
+                ? [
+                    'Start fast! 🚀',
+                    'I am the imposter today! 😈',
+                    'Who is the imposter? 🕵️',
+                    'I am 100% innocent! 😇',
+                    'Everyone ready? ⏳',
+                    'Catch the liar! 💀',
+                  ]
+                : [
+                    'দেরি কেন? খেলা শুরু করো! 🚀',
+                    'আজকে আমি ধাপ্পাবাজ হব! 😈',
+                    'কে ধাপ্পাবাজ হবে আজ? 🕵️',
+                    'আমি কিন্তু একদম খাঁটি মানুষ! 😇',
+                    'সবাই রেডি তো? ⏳',
+                    'ধাপ্পাবাজ ধরা খেলে খবর আছে! 💀',
+                  ]
+              ).map((phrase) => (
                 <button
                   type="button"
                   key={phrase}
+                  disabled={cooldownSeconds > 0}
                   onClick={() => handleSendQuickReaction(phrase)}
-                  className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200/60 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap shrink-0 transition-all cursor-pointer ${
+                    cooldownSeconds > 0
+                      ? 'bg-slate-100 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 text-slate-400 opacity-60 cursor-not-allowed'
+                      : 'bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 border-slate-200/60 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 active:scale-95'
+                  }`}
                 >
                   {phrase}
                 </button>
               ))}
             </div>
-
-            {/* Custom Text Chat Form */}
-            <form onSubmit={handleSendLobbyMessage} className="flex gap-1.5 pt-1">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                maxLength={80}
-                placeholder={isEn ? 'Chat in lobby...' : 'লবিতে কথা বলুন...'}
-                className="flex-1 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-medium focus:outline-none focus:border-amber-500"
-              />
-              <button
-                type="submit"
-                disabled={!chatInput.trim()}
-                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1 cursor-pointer disabled:opacity-40"
-              >
-                <Send className="w-3 h-3" />
-                <span>{isEn ? 'Send' : 'পাঠান'}</span>
-              </button>
-            </form>
           </div>
         )}
       </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, PlusCircle, LogIn, X, ExternalLink, ShieldCheck, AlertCircle, Wifi, RefreshCw, Activity } from 'lucide-react';
 import { Language, Theme } from '../../types/game';
 import { PLAYER_AVATARS } from '../../data/avatars';
-import { createOnlineRoom, joinOnlineRoom, DEFAULT_ONLINE_SETTINGS } from '../../services/multiplayerService';
+import { createOnlineRoom, joinOnlineRoom, DEFAULT_ONLINE_SETTINGS, isQuotaExceededError } from '../../services/multiplayerService';
 import { sound } from '../../utils/audio';
 import { OnlinePlayer, OnlineRoomData } from '../../types/multiplayer';
 import { signInWithGoogle, auth, ensureAuthenticatedUser, resetToFreshSession } from '../../firebase';
@@ -41,6 +41,7 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
   const [isPickingAvatar, setIsPickingAvatar] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isQuotaError, setIsQuotaError] = useState<boolean>(false);
   const [needsGoogleSignIn, setNeedsGoogleSignIn] = useState<boolean>(false);
   const [showDiagnostics, setShowDiagnostics] = useState<boolean>(false);
   const [diagResult, setDiagResult] = useState<ConnectivityTestResult | null>(null);
@@ -141,6 +142,7 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsQuotaError(false);
     if (!name.trim()) {
       setError(isEn ? 'Please enter your name' : 'অনুগ্রহ করে আপনার নাম লিখুন');
       return;
@@ -153,6 +155,9 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
       try {
         result = await createOnlineRoom(name, avatar);
       } catch (firstErr: any) {
+        if (isQuotaExceededError(firstErr)) {
+          throw firstErr;
+        }
         const isTransient =
           firstErr?.message?.includes('offline') ||
           firstErr?.code === 'unavailable' ||
@@ -169,6 +174,16 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
       onRoomJoined(result.roomData, result.player);
     } catch (err: any) {
       console.error('Room create error:', err);
+      if (isQuotaExceededError(err)) {
+        setIsQuotaError(true);
+        setError(
+          isEn
+            ? 'Firebase daily free quota limit exceeded (50k reads/20k writes limit reached). See resolution steps below.'
+            : 'ফায়ারবেসের আজকের ফ্রি কোটা সীমা (৫০,০০০ রিড / ২০,০০০ রাইট) পূর্ণ হয়ে গেছে। বিস্তারিত নিচে দেখুন।'
+        );
+        return;
+      }
+
       const isRestricted =
         err?.code === 'auth/admin-restricted-operation' ||
         err?.message?.includes('admin-restricted-operation');
@@ -210,6 +225,7 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsQuotaError(false);
     if (!name.trim()) {
       setError(isEn ? 'Please enter your name' : 'অনুগ্রহ করে আপনার নাম লিখুন');
       return;
@@ -227,6 +243,9 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
       try {
         result = await joinOnlineRoom(cleanCode, name, avatar);
       } catch (firstErr: any) {
+        if (isQuotaExceededError(firstErr)) {
+          throw firstErr;
+        }
         const isTransient =
           firstErr?.message?.includes('offline') ||
           firstErr?.code === 'unavailable' ||
@@ -243,6 +262,16 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
       onRoomJoined(result.roomData, result.player);
     } catch (err: any) {
       console.error('Room join error:', err);
+      if (isQuotaExceededError(err)) {
+        setIsQuotaError(true);
+        setError(
+          isEn
+            ? 'Firebase daily free quota limit exceeded (50k reads/20k writes limit reached). See resolution steps below.'
+            : 'ফায়ারবেসের আজকের ফ্রি কোটা সীমা (৫০,০০০ রিড / ২০,০০০ রাইট) পূর্ণ হয়ে গেছে। বিস্তারিত নিচে দেখুন।'
+        );
+        return;
+      }
+
       const isRestricted =
         err?.code === 'auth/admin-restricted-operation' ||
         err?.message?.includes('admin-restricted-operation');
@@ -489,19 +518,67 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
             </div>
           )}
 
-          {/* Error Message with instant Retry / Reset buttons */}
+          {/* Error Message with instant Retry / Reset buttons and Quota Exceeded Guide */}
           {error && (
-            <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-semibold space-y-2">
-              <p>{error}</p>
+            <div className={`p-4 rounded-2xl border text-xs font-semibold space-y-2.5 ${
+              isQuotaError
+                ? 'bg-amber-500/10 border-amber-500/40 text-amber-900 dark:text-amber-200'
+                : 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400'
+            }`}>
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className={`w-5 h-5 shrink-0 mt-0.5 ${isQuotaError ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'}`} />
+                <div className="space-y-1">
+                  <div className="font-bold text-sm">
+                    {isQuotaError
+                      ? (isEn ? 'Firebase Quota Exceeded' : 'ফায়ারবেস দৈনিক ফ্রি সীমা পূর্ণ হয়েছে')
+                      : (isEn ? 'Connection Notice' : 'সংযোগ সতর্কতা')}
+                  </div>
+                  <p className="leading-relaxed opacity-95">{error}</p>
+                </div>
+              </div>
+
+              {isQuotaError && (
+                <div className="p-3 rounded-xl bg-white/70 dark:bg-slate-900/70 border border-amber-500/20 text-[11px] leading-relaxed text-slate-700 dark:text-slate-300 space-y-2">
+                  <div className="font-bold text-amber-700 dark:text-amber-400">
+                    {isEn ? 'Why this happened & What you can do:' : 'কেন এমন হলো এবং করণীয়:'}
+                  </div>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>
+                      <span className="font-semibold">{isEn ? 'Free Plan Limit:' : 'ফ্রি লিমিট:'}</span>{' '}
+                      {isEn
+                        ? 'Firebase Spark tier allows 50k reads and 20k writes per day.'
+                        : 'ফায়ারবেস স্পার্ক প্ল্যানে দিনে ৫০,০০০ রিড ও ২০,০০০ রাইট সীমাবদ্ধ।'}
+                    </li>
+                    <li>
+                      <span className="font-semibold">{isEn ? 'Solution 1 (Recommended):' : 'পদ্ধতি ১ (সেরা উপায়):'}</span>{' '}
+                      {isEn
+                        ? 'In Firebase Console, upgrade to Blaze Plan (Pay as you go). You still get the 50k reads free daily, and extra usage costs pennies without hard-locking your game.'
+                        : 'Firebase Console এ গিয়ে Blaze Plan এ আপগ্রেড করুন। দৈনিক ফ্রি সীমা সম্পূর্ণ অক্ষুণ্ণ থাকবে এবং খেলা কখনও আটকে যাবে না।'}
+                    </li>
+                    <li>
+                      <span className="font-semibold">{isEn ? 'Solution 2:' : 'পদ্ধতি ২:'}</span>{' '}
+                      {isEn
+                        ? 'Wait for the automatic daily reset at 00:00 Pacific Time (1:00 PM / 2:00 PM BST).'
+                        : 'দৈনিক কোটা প্যাসিফিক টাইম মধ্যরাতে (বাংলাদেশ সময় দুপুর ১টা/২টা) স্বয়ংক্রিয়ভাবে রিসেট হওয়া পর্যন্ত অপেক্ষা করুন।'}
+                    </li>
+                  </ul>
+                </div>
+              )}
+
               <div className="flex items-center gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => {
                     sessionStorage.removeItem('dhappabaj_active_room');
                     setError(null);
+                    setIsQuotaError(false);
                     setNeedsGoogleSignIn(false);
                   }}
-                  className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-700 dark:text-rose-200 text-xs font-bold transition-all cursor-pointer"
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    isQuotaError
+                      ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-900 dark:text-amber-100'
+                      : 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-700 dark:text-rose-200'
+                  }`}
                 >
                   {isEn ? 'Clear Cache & Retry' : 'ক্যাশ মুছে আবার চেষ্টা করুন'}
                 </button>

@@ -14,6 +14,9 @@ import {
   CollectionReference,
   QuerySnapshot,
   enableNetwork,
+  query,
+  orderBy,
+  limit,
 } from 'firebase/firestore';
 import { db, auth, ensureAuthenticatedUser, resetToFreshSession, handleFirestoreError, OperationType } from '../firebase';
 import { logProductionEvent } from '../utils/productionDiagnostics';
@@ -27,6 +30,19 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number = 15000): P
   return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
 }
 
+// Detect Firebase Spark daily quota exhaustion (resource-exhausted)
+export function isQuotaExceededError(err: any): boolean {
+  if (!err) return false;
+  const msg = (err?.message || String(err)).toLowerCase();
+  const code = (err?.code || '').toLowerCase();
+  return (
+    code === 'resource-exhausted' ||
+    msg.includes('resource-exhausted') ||
+    msg.includes('quota exceeded') ||
+    msg.includes('quota')
+  );
+}
+
 // Helper to safely execute getDoc with automatic retry and network reconnection
 export async function safeGetDoc(docRef: DocumentReference): Promise<DocumentSnapshot> {
   let attempts = 0;
@@ -34,6 +50,9 @@ export async function safeGetDoc(docRef: DocumentReference): Promise<DocumentSna
     try {
       return await withTimeout(getDoc(docRef), 12000);
     } catch (err: any) {
+      if (isQuotaExceededError(err)) {
+        throw new Error('Firebase Quota Exceeded (রিসোর্স লিমিট শেষ): আজকের ফ্রি কোটা শেষ হয়ে গেছে।');
+      }
       attempts++;
       const isOffline =
         err?.message?.includes('offline') ||
@@ -65,6 +84,9 @@ export async function safeGetDocs(queryRef: Query | CollectionReference): Promis
     try {
       return await withTimeout(getDocs(queryRef), 12000);
     } catch (err: any) {
+      if (isQuotaExceededError(err)) {
+        throw new Error('Firebase Quota Exceeded (রিসোর্স লিমিট শেষ): আজকের ফ্রি কোটা শেষ হয়ে গেছে।');
+      }
       attempts++;
       const isOffline =
         err?.message?.includes('offline') ||
@@ -669,14 +691,13 @@ export async function sendPlayerHeartbeat(
 
   try {
     await updateDoc(playerRef, updates);
-    // Touch room activity
-    const roomUpdates: Record<string, any> = {
-      lastActivityAt: now,
-    };
+    // Only the host touches the parent room document to prevent N*writes multiplier
     if (isHost) {
-      roomUpdates.hostDisconnectedAt = null;
+      await updateDoc(roomRef, {
+        lastActivityAt: now,
+        hostDisconnectedAt: null,
+      });
     }
-    await updateDoc(roomRef, roomUpdates);
   } catch (error) {
     // Non-critical background heartbeat
   }
@@ -1473,19 +1494,28 @@ export async function confirmOnlineCardSeen(roomCode: string, playerId?: string)
   }
 }
 
-// Send discussion chat message
+export const CHAT_COOLDOWN_MS = 5000;
+let lastChatSendTime = 0;
+
+// Send discussion quick chat message (enforces 5-second cooldown & character limit)
 export async function sendOnlineChatMessage(
   roomCode: string,
   player: OnlinePlayer,
   text: string
-) {
+): Promise<{ success: boolean; cooldownRemaining?: number }> {
   const user = auth.currentUser;
-  if (!user || !text.trim()) return;
+  if (!user || !text.trim()) return { success: false };
 
-  const msgId = `m-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  const msgRef = doc(db, 'rooms', roomCode, 'messages', msgId);
-  const roomRef = doc(db, 'rooms', roomCode);
   const now = Date.now();
+  const timeSinceLast = now - lastChatSendTime;
+  if (timeSinceLast < CHAT_COOLDOWN_MS) {
+    const remaining = Math.ceil((CHAT_COOLDOWN_MS - timeSinceLast) / 1000);
+    return { success: false, cooldownRemaining: remaining };
+  }
+
+  lastChatSendTime = now;
+  const msgId = `m-${now}-${Math.random().toString(36).slice(2, 6)}`;
+  const msgRef = doc(db, 'rooms', roomCode, 'messages', msgId);
 
   const messageData: ChatMessage = {
     id: msgId,
@@ -1493,30 +1523,35 @@ export async function sendOnlineChatMessage(
     senderName: player.name,
     senderAvatar: player.avatar,
     senderColor: player.avatarColor,
-    text: text.trim().slice(0, 140),
+    text: text.trim().slice(0, 80),
     timestamp: now,
   };
 
   try {
     await setDoc(msgRef, sanitizeForFirestore(messageData));
-    await updateDoc(roomRef, { lastActivityAt: now });
+    return { success: true };
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, `rooms/${roomCode}/messages/${msgId}`);
+    return { success: false };
   }
 }
 
-// Subscribe to live chat messages
+// Subscribe to live chat messages (Optimized to last 3 messages only to minimize Firestore reads)
 export function subscribeToChatMessages(
   roomCode: string,
   onUpdate: (messages: ChatMessage[]) => void,
   onError?: (err: unknown) => void
 ) {
   const msgsColl = collection(db, 'rooms', roomCode, 'messages');
+  // Read strictly the last 3 messages
+  const q = query(msgsColl, orderBy('timestamp', 'desc'), limit(3));
+
   return onSnapshot(
-    msgsColl,
+    q,
     (snap) => {
       const list = snap.docs.map((d) => d.data() as ChatMessage);
-      list.sort((a, b) => a.timestamp - b.timestamp);
+      // Reverse to chronological order (oldest of the 3 on top, latest at bottom)
+      list.reverse();
       onUpdate(list);
     },
     (error) => {
@@ -1526,40 +1561,15 @@ export function subscribeToChatMessages(
   );
 }
 
-// Send live ephemeral voice message to room (zero permanent storage)
+// Voice chat is disabled to eliminate Firestore read/write quota exhaustion
 export async function sendOnlineVoiceMessage(
-  roomCode: string,
-  player: OnlinePlayer,
-  audioBase64: string,
-  durationMs: number = 2500
+  _roomCode: string,
+  _player: OnlinePlayer,
+  _audioBase64: string,
+  _durationMs: number = 2500
 ) {
-  const user = auth.currentUser;
-  if (!user) return;
-
-  const msgId = `v-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  const msgRef = doc(db, 'rooms', roomCode, 'messages', msgId);
-  const roomRef = doc(db, 'rooms', roomCode);
-  const now = Date.now();
-
-  const voiceMsg: ChatMessage = {
-    id: msgId,
-    senderId: user.uid,
-    senderName: player.name,
-    senderAvatar: player.avatar,
-    senderColor: player.avatarColor,
-    text: '🎙️ [ভয়েস বার্তা]',
-    isVoice: true,
-    audioData: audioBase64,
-    durationMs,
-    timestamp: now,
-  };
-
-  try {
-    await setDoc(msgRef, sanitizeForFirestore(voiceMsg));
-    await updateDoc(roomRef, { lastActivityAt: now });
-  } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, `rooms/${roomCode}/messages/${msgId}`);
-  }
+  // Disabled by user request to preserve Firebase Spark free quota
+  console.info('Voice message broadcasting is disabled to optimize Firestore reads and writes.');
 }
 
 // Purge voice messages after gameplay to guarantee zero retained audio
