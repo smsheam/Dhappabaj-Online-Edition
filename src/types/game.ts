@@ -1,4 +1,24 @@
-export type CategoryId = 'food' | 'people' | 'object' | 'animal';
+export type CategoryId =
+  | 'school_life'
+  | 'sports'
+  | 'lifestyle'
+  | 'historical_places'
+  | 'bd_tourist'
+  | 'food'
+  | 'people'
+  | 'animal'
+  | 'object'
+  | 'tech'
+  | 'movies'
+  | 'geography'
+  | 'professions'
+  | 'nature'
+  | 'transport'
+  | 'festivals'
+  | 'everyday_activities'
+  | 'science'
+  | 'clothing'
+  | 'landmarks';
 
 export type Language = 'bn' | 'en';
 export type Theme = 'dark' | 'light';

@@ -5,6 +5,7 @@ export interface ScoreCalculationInput {
   imposterIds: string[];
   votes: Record<string, string | string[]>; // voterId -> suspectId or suspectIds
   word: WordItem;
+  eliminatedPlayerId?: string | null;
   imposterGuessedWord?: boolean;
 }
 
@@ -12,6 +13,7 @@ export function calculateRoundScores({
   players,
   imposterIds,
   votes,
+  eliminatedPlayerId,
   imposterGuessedWord = false,
 }: ScoreCalculationInput): RoundScoreDetail[] {
   // Count how many votes each player received
@@ -29,7 +31,21 @@ export function calculateRoundScores({
     });
   });
 
-  const totalInnocents = players.filter((p) => !imposterIds.includes(p.id)).length;
+  // Determine eliminated player if not directly provided
+  let effectiveEliminatedId = eliminatedPlayerId;
+  if (effectiveEliminatedId === undefined) {
+    let maxVotes = 0;
+    let topSuspects: string[] = [];
+    Object.entries(voteCountMap).forEach(([pId, count]) => {
+      if (count > maxVotes) {
+        maxVotes = count;
+        topSuspects = [pId];
+      } else if (count === maxVotes && count > 0) {
+        topSuspects.push(pId);
+      }
+    });
+    effectiveEliminatedId = topSuspects.length === 1 ? topSuspects[0] : null;
+  }
 
   return players.map((player) => {
     const isImposter = imposterIds.includes(player.id);
@@ -41,77 +57,81 @@ export function calculateRoundScores({
     const reasons: { bn: string; en: string }[] = [];
 
     if (!isImposter) {
-      // INNOCENT CITIZEN SCORING (Supports 1 or 2 votes)
+      // CITIZEN SCORING
       if (votedList.length > 0) {
         votedList.forEach((sId) => {
           if (imposterIds.includes(sId)) {
-            // Correct vote on Imposter: +4
+            // Correct vote for Imposter: +4
             pointsDelta += 4;
             reasons.push({
-              bn: 'সঠিক Imposter শনাক্ত (+৪)',
+              bn: 'সঠিক ধাপ্পাবাজ শনাক্ত (+৪)',
               en: 'Correct Imposter vote (+4)',
             });
+
+            // Extra +1 bonus if that voted Imposter is eliminated
+            if (effectiveEliminatedId === sId) {
+              pointsDelta += 1;
+              reasons.push({
+                bn: 'ধাপ্পাবাজ বহিষ্কার বোনাস (+১)',
+                en: 'Eliminated Imposter bonus (+1)',
+              });
+            }
           } else {
-            // Practical penalty: -1
+            // Mistaken vote for Citizen: -1
             pointsDelta -= 1;
             reasons.push({
-              bn: 'ভুল সন্দেহ (-১)',
-              en: 'Mistaken suspect (-1)',
+              bn: 'নির্দোষকে ভুল ভোট (-১)',
+              en: 'Wrong vote on Citizen (-1)',
             });
           }
         });
       }
 
-      // Framed Innocent Bonus: If framed by everyone else
-      if (votesReceived >= players.length - 1 && players.length > 2) {
+      // Citizen eliminated as unique highest-voted player: +3 consolation bonus
+      if (effectiveEliminatedId === player.id) {
         pointsDelta += 3;
         reasons.push({
-          bn: 'নির্দোষ হওয়ায় পেয়েছে (+৩)',
-          en: 'Innocent martyr bonus (+3)',
+          bn: 'নির্দোষ হয়ে বহিষ্কৃত হওয়ার সান্ত্বনা বোনাস (+৩)',
+          en: 'Wrongly eliminated Citizen bonus (+3)',
         });
       }
     } else {
       // IMPOSTER SCORING
-      const innocentVotesAgainstImposter = Object.entries(votes).filter(
-        ([voterId, suspect]) => {
-          if (imposterIds.includes(voterId)) return false;
-          const list = Array.isArray(suspect) ? suspect : suspect ? [suspect] : [];
-          return list.includes(player.id);
-        }
-      ).length;
+      // Imposter's own vote has NO scoring impact (0 points, no penalty)
 
-      // Unanimously caught by all innocents
-      if (innocentVotesAgainstImposter >= totalInnocents && totalInnocents > 0) {
-        pointsDelta -= 2;
+      const isEliminated = effectiveEliminatedId === player.id;
+      const survivedOrGuessed = !isEliminated || imposterGuessedWord;
+
+      if (!survivedOrGuessed) {
+        // Imposter eliminated and failed final guess: exactly 0 points (no deduction)
+        pointsDelta = 0;
         reasons.push({
-          bn: 'সবার ভোটে শনাক্ত (-২)',
-          en: 'Caught unanimously (-2)',
+          bn: 'ধাপ্পাবাজ ধরা পড়েছে (০ পয়েন্ট)',
+          en: 'Imposter caught and eliminated (0 pts)',
         });
       } else {
-        // Survived undetected
+        // Imposter survived or won via final guess: +5 points
         pointsDelta += 5;
-        reasons.push({
-          bn: 'সফলভাবে আত্মগোপন (+৫)',
-          en: 'Survived undetected (+5)',
-        });
-      }
+        if (imposterGuessedWord && isEliminated) {
+          reasons.push({
+            bn: 'শব্দ অনুমান করে জয়লাভ (+৫)',
+            en: 'Won by guessing secret word (+5)',
+          });
+        } else {
+          reasons.push({
+            bn: 'ধাপ্পাবাজের সফল জয় (+৫)',
+            en: 'Imposter survived and won (+5)',
+          });
+        }
 
-      // Zero votes against Imposter bonus: +3
-      if (votesReceived === 0) {
-        pointsDelta += 3;
-        reasons.push({
-          bn: 'শূন্য ভোট প্রাপ্তি বোনাস (+৩)',
-          en: 'Ghost stealth (0 votes) bonus (+3)',
-        });
-      }
-
-      // Secret word guess bonus: +3
-      if (imposterGuessedWord) {
-        pointsDelta += 3;
-        reasons.push({
-          bn: 'সঠিক শব্দ অনুমান বোনাস (+৩)',
-          en: 'Guessed secret word bonus (+3)',
-        });
+        // Additional +3 bonus if Imposter received ZERO votes
+        if (votesReceived === 0) {
+          pointsDelta += 3;
+          reasons.push({
+            bn: 'কোনো ভোট না পাওয়ার বোনাস (+৩)',
+            en: 'Zero votes received bonus (+3)',
+          });
+        }
       }
     }
 
