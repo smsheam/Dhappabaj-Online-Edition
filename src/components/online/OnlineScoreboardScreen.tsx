@@ -39,6 +39,30 @@ export const OnlineScoreboardScreen: React.FC<OnlineScoreboardScreenProps> = ({
   const confirmedCount = targetPlayers.filter((p) => confirmedPlayerIds.includes(p.id)).length;
   const totalCount = targetPlayers.length;
 
+  // Automated transition once all players have confirmed (Host-executed to respect Firestore rules)
+  const autoAdvanceTriggeredRef = React.useRef<boolean>(false);
+  const isAllConfirmed = totalCount > 0 && confirmedCount >= totalCount;
+
+  React.useEffect(() => {
+    if (!isHost || !isAllConfirmed || autoAdvanceTriggeredRef.current) return;
+
+    autoAdvanceTriggeredRef.current = true;
+    const timer = setTimeout(async () => {
+      try {
+        if (isLastRound) {
+          await setOnlineRoomPhase(room.roomCode, 'GAME_OVER');
+        } else {
+          await startOnlineRound(room.roomCode, room.currentRound + 1);
+        }
+      } catch (err) {
+        console.error('Error auto-advancing to next round:', err);
+        autoAdvanceTriggeredRef.current = false;
+      }
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [isHost, isAllConfirmed, isLastRound, room.roomCode, room.currentRound]);
+
   const handleConfirmReady = async () => {
     if (hasConfirmed || isSubmittingReady) return;
     setIsSubmittingReady(true);

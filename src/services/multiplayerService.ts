@@ -17,6 +17,7 @@ import {
   query,
   orderBy,
   limit,
+  arrayUnion,
 } from 'firebase/firestore';
 import { db, auth, ensureAuthenticatedUser, resetToFreshSession, handleFirestoreError, OperationType } from '../firebase';
 import { logProductionEvent } from '../utils/productionDiagnostics';
@@ -956,14 +957,15 @@ export async function startOnlineRound(roomCode: string, roundNumber: number = 1
     batch.delete(mDoc.ref);
   });
 
-  // Rotating starting player sequence by round:
-  // 1st round -> 1st player, 2nd round -> 2nd player, 3rd round -> 3rd player, etc.
-  const sortedPlayers = [...players].sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
-  const startIndex = (roundNumber - 1) % sortedPlayers.length;
-  const clueOrder: string[] = [];
-  for (let i = 0; i < sortedPlayers.length; i++) {
-    clueOrder.push(sortedPlayers[(startIndex + i) % sortedPlayers.length].id);
+  // Completely randomize clue order & first speaker each round (never fixed to host!)
+  const shuffledPlayers = [...players];
+  for (let i = shuffledPlayers.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = shuffledPlayers[i];
+    shuffledPlayers[i] = shuffledPlayers[j];
+    shuffledPlayers[j] = temp;
   }
+  const clueOrder: string[] = shuffledPlayers.map((p) => p.id);
 
   const now = Date.now();
 
@@ -1309,13 +1311,15 @@ export async function resolveOnlineVotingResults(roomCode: string) {
 
   const batch = writeBatch(db);
 
-  // Update players' scores
-  scoreDetails.forEach((detail) => {
-    const pRef = doc(db, 'rooms', roomCode, 'players', detail.playerId);
-    const existingP = players.find((p) => p.id === detail.playerId);
-    const newScore = Math.max(0, (existingP?.score || 0) + detail.pointsDelta);
-    batch.update(pRef, { score: newScore });
-  });
+  // If no final guess is pending, apply round points immediately to players
+  if (!shouldGuess) {
+    scoreDetails.forEach((detail) => {
+      const pRef = doc(db, 'rooms', roomCode, 'players', detail.playerId);
+      const existingP = players.find((p) => p.id === detail.playerId);
+      const newScore = Math.max(0, (existingP?.score || 0) + detail.pointsDelta);
+      batch.update(pRef, { score: newScore });
+    });
+  }
 
   const nextPhase: OnlineGamePhase = shouldGuess ? 'IMPOSTER_GUESS' : 'RESULT';
   const initialWinner = caughtImposter ? 'innocents' : 'imposter';
@@ -1323,7 +1327,7 @@ export async function resolveOnlineVotingResults(roomCode: string) {
 
   batch.update(roomRef, {
     currentPhase: nextPhase,
-    // Requirement 1: Imposter reveal result page set to 20s (20000ms)
+    // Imposter reveal result page set to 20s (20000ms)
     phaseEndsAt: shouldGuess ? now + 45000 : now + 20000,
     eliminatedPlayerId: eliminatedId,
     revealedVotes: votesMap,
@@ -1358,45 +1362,45 @@ export async function submitOnlineImposterGuess(
   const isCorrect = cleanGuess === wordBnClean || cleanGuess === wordEnClean;
   const now = Date.now();
 
-  // If correct, Imposter steals the win! Update scores safely
+  // Re-calculate the definitive final scores with the imposter's guess result
+  const playersSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'players'));
+  const allPlayers = playersSnap.docs.map((d) => d.data() as OnlinePlayer);
+
+  const legacyPlayers = allPlayers.map((p) => ({
+    id: p.id,
+    name: p.name,
+    titleBn: p.titleBn,
+    titleEn: p.titleEn,
+    score: p.score,
+    avatarColor: p.avatarColor,
+    avatar: p.avatar,
+  }));
+
+  const finalScoreDetails = calculateRoundScores({
+    players: legacyPlayers,
+    imposterIds: roomData.revealedImposterIds || [],
+    votes: roomData.revealedVotes || {},
+    word: secretWord,
+    eliminatedPlayerId: roomData.eliminatedPlayerId,
+    imposterGuessedWord: isCorrect,
+  });
+
   const batch = writeBatch(db);
-  const updatedScoreDetails = [...(roomData.scoreDetails || [])];
 
-  if (isCorrect) {
-    const imposterIds = roomData.revealedImposterIds || [];
-    for (const impId of imposterIds) {
-      const pRef = doc(db, 'rooms', roomCode, 'players', impId);
-      const pSnap = await safeGetDoc(pRef);
-      if (pSnap.exists()) {
-        const curScore = (pSnap.data() as OnlinePlayer).score || 0;
-        // Fix: Add 3 bonus points to current total accumulated score!
-        batch.update(pRef, {
-          score: curScore + 3,
-        });
-      }
-
-      // Update breakdown details
-      const detailIndex = updatedScoreDetails.findIndex((d) => d.playerId === impId);
-      if (detailIndex !== -1) {
-        updatedScoreDetails[detailIndex] = {
-          ...updatedScoreDetails[detailIndex],
-          pointsDelta: updatedScoreDetails[detailIndex].pointsDelta + 3,
-          reasons: [
-            ...updatedScoreDetails[detailIndex].reasons,
-            { bn: 'সঠিক শব্দ অনুমান বোনাস (+৩)', en: 'Guessed secret word bonus (+3)' },
-          ],
-        };
-      }
-    }
-  }
+  // Update every player's score with the definitive result
+  finalScoreDetails.forEach((detail) => {
+    const pRef = doc(db, 'rooms', roomCode, 'players', detail.playerId);
+    const existingP = allPlayers.find((p) => p.id === detail.playerId);
+    const newScore = Math.max(0, (existingP?.score || 0) + detail.pointsDelta);
+    batch.update(pRef, { score: newScore });
+  });
 
   batch.update(roomRef, {
     currentPhase: 'RESULT',
     imposterGuessedWord: isCorrect,
     imposterGuessAnswer: guess.trim(),
     winner: isCorrect ? 'imposter' : 'innocents',
-    scoreDetails: sanitizeForFirestore(updatedScoreDetails),
-    // Requirement 1: Result reveal page time is 20s (20000ms)
+    scoreDetails: sanitizeForFirestore(finalScoreDetails),
     phaseEndsAt: now + 20000,
     lastActivityAt: now,
     updatedAt: now,
@@ -1413,47 +1417,53 @@ export function generateGuessChoices(correctWord: WordItem, category: CategoryId
 // Every player confirms next round; when all connected players confirm, next round starts automatically
 export async function confirmOnlineNextRound(roomCode: string, playerId: string) {
   const roomRef = doc(db, 'rooms', roomCode);
-  const roomSnap = await safeGetDoc(roomRef);
-  if (!roomSnap.exists()) return;
-  const roomData = roomSnap.data() as OnlineRoomData;
+  const activeUid = playerId || auth.currentUser?.uid;
+  if (!activeUid) return;
 
-  const currentConfirmed = roomData.nextRoundConfirmed || [];
-  if (currentConfirmed.includes(playerId)) return;
+  const now = Date.now();
 
-  const updatedConfirmed = [...currentConfirmed, playerId];
+  // Atomically append player confirmation to nextRoundConfirmed in room document
+  await updateDoc(roomRef, {
+    nextRoundConfirmed: arrayUnion(activeUid),
+    lastActivityAt: now,
+    updatedAt: now,
+  });
 
-  // Get active online players
-  const playersSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'players'));
-  const allPlayers = playersSnap.docs.map((d) => d.data() as OnlinePlayer);
-  const activePlayers = allPlayers.filter((p) => p.connectionStatus !== 'offline');
-  const targetPlayers = activePlayers.length > 0 ? activePlayers : allPlayers;
+  // If the host is executing this confirmation, check if everyone is confirmed and advance directly
+  try {
+    const roomSnap = await safeGetDoc(roomRef);
+    if (!roomSnap.exists()) return;
+    const roomData = roomSnap.data() as OnlineRoomData;
+    const isHost = roomData.hostId === activeUid;
 
-  // Check if all connected players confirmed
-  const isAllConfirmed = targetPlayers.every((p) => updatedConfirmed.includes(p.id));
+    if (isHost) {
+      const playersSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'players'));
+      const allPlayers = playersSnap.docs.map((d) => d.data() as OnlinePlayer);
+      const activePlayers = allPlayers.filter((p) => p.connectionStatus !== 'offline');
+      const targetPlayers = activePlayers.length > 0 ? activePlayers : allPlayers;
+      const confirmedList = roomData.nextRoundConfirmed || [];
+      const isAllConfirmed = targetPlayers.every((p) => confirmedList.includes(p.id) || p.id === activeUid);
 
-  if (isAllConfirmed) {
-    // All players confirmed! Advance to next round or game over
-    if (roomData.currentRound >= roomData.totalRounds) {
-      await updateDoc(roomRef, {
-        nextRoundConfirmed: [],
-        currentPhase: 'GAME_OVER',
-        lastActivityAt: Date.now(),
-        updatedAt: Date.now(),
-      });
-    } else {
-      await updateDoc(roomRef, {
-        nextRoundConfirmed: [],
-        lastActivityAt: Date.now(),
-        updatedAt: Date.now(),
-      });
-      await startOnlineRound(roomCode, roomData.currentRound + 1);
+      if (isAllConfirmed) {
+        if (roomData.currentRound >= roomData.totalRounds) {
+          await updateDoc(roomRef, {
+            nextRoundConfirmed: [],
+            currentPhase: 'GAME_OVER',
+            lastActivityAt: Date.now(),
+            updatedAt: Date.now(),
+          });
+        } else {
+          await updateDoc(roomRef, {
+            nextRoundConfirmed: [],
+            lastActivityAt: Date.now(),
+            updatedAt: Date.now(),
+          });
+          await startOnlineRound(roomCode, roomData.currentRound + 1);
+        }
+      }
     }
-  } else {
-    await updateDoc(roomRef, {
-      nextRoundConfirmed: updatedConfirmed,
-      lastActivityAt: Date.now(),
-      updatedAt: Date.now(),
-    });
+  } catch (err) {
+    console.error('Error in host confirmation check:', err);
   }
 }
 

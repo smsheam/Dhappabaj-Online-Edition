@@ -5,7 +5,8 @@ import { PLAYER_AVATARS } from '../../data/avatars';
 import { createOnlineRoom, joinOnlineRoom, DEFAULT_ONLINE_SETTINGS, isQuotaExceededError } from '../../services/multiplayerService';
 import { sound } from '../../utils/audio';
 import { OnlinePlayer, OnlineRoomData } from '../../types/multiplayer';
-import { signInWithGoogle, auth, ensureAuthenticatedUser, resetToFreshSession } from '../../firebase';
+import { User, onAuthStateChanged } from 'firebase/auth';
+import { signInWithGoogle, auth, ensureAuthenticatedUser, resetToFreshSession, signOutUser } from '../../firebase';
 import { testProductionConnectivity, getProductionDiagnostics, ConnectivityTestResult } from '../../utils/productionDiagnostics';
 
 interface OnlineJoinCreateModalProps {
@@ -27,12 +28,16 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
   const isEn = lang === 'en';
   const [activeTab, setActiveTab] = useState<'create' | 'join'>(initialRoomCode ? 'join' : 'create');
 
+  // Firebase Auth state
+  const [authUser, setAuthUser] = useState<User | null>(auth.currentUser);
+  const isGoogleUser = Boolean(authUser && !authUser.isAnonymous && authUser.email);
+
   // Fresh session: Do not linger old names in localStorage across page refreshes
   const [name, setName] = useState<string>(() => {
     try {
       localStorage.removeItem('dhappabaj_name');
     } catch {}
-    return sessionStorage.getItem('dhappabaj_session_name') || '';
+    return sessionStorage.getItem('dhappabaj_session_name') || auth.currentUser?.displayName || '';
   });
   const [avatar, setAvatar] = useState<string>(() => {
     return sessionStorage.getItem('dhappabaj_session_avatar') || '🕵️';
@@ -47,6 +52,20 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
   const [diagResult, setDiagResult] = useState<ConnectivityTestResult | null>(null);
   const [testingDiag, setTestingDiag] = useState<boolean>(false);
   const [resettingIdentity, setResettingIdentity] = useState<boolean>(false);
+
+  // Sync auth state listener
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setAuthUser(user);
+      if (user && !user.isAnonymous && user.displayName) {
+        setName((prev) => prev.trim() ? prev : (user.displayName || ''));
+        try {
+          sessionStorage.setItem('dhappabaj_session_name', user.displayName);
+        } catch {}
+      }
+    });
+    return () => unsub();
+  }, []);
 
   const handleResetSession = async () => {
     setResettingIdentity(true);
@@ -113,12 +132,53 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
     setIsPickingAvatar(false);
   };
 
+  // 1-Click Google Sign In (dedicated button)
+  const handleGoogleSignInOnly = async () => {
+    setLoading(true);
+    setError(null);
+    sound.playClick();
+    try {
+      const user = await signInWithGoogle();
+      setAuthUser(user);
+      if (user.displayName) {
+        setName(user.displayName);
+        try {
+          sessionStorage.setItem('dhappabaj_session_name', user.displayName);
+        } catch {}
+      }
+      setNeedsGoogleSignIn(false);
+    } catch (err: any) {
+      console.error('Google sign-in error:', err);
+      if (err?.code !== 'auth/popup-closed-by-user') {
+        setError(err?.message || (isEn ? 'Google sign-in failed' : 'গুগল সাইন-ইন ব্যর্থ হয়েছে'));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Switch to Guest mode
+  const handleSwitchToGuest = async () => {
+    sound.playClick();
+    setLoading(true);
+    try {
+      await signOutUser();
+      setAuthUser(null);
+      await ensureAuthenticatedUser();
+    } catch (e) {
+      console.error('Switch to guest mode error:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleGoogleSignInAndProceed = async () => {
     setLoading(true);
     setError(null);
     sound.playClick();
     try {
       const user = await signInWithGoogle();
+      setAuthUser(user);
       const finalName = name.trim() || user.displayName || 'Player';
       setName(finalName);
       setNeedsGoogleSignIn(false);

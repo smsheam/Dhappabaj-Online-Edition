@@ -56,28 +56,25 @@ export function calculateRoundScores({
     let pointsDelta = 0;
     const reasons: { bn: string; en: string }[] = [];
 
+    // Did the imposter team lose the game?
+    // An imposter was caught/eliminated AND did not guess the secret word.
+    const imposterCaught = effectiveEliminatedId !== null && imposterIds.includes(effectiveEliminatedId);
+    const imposterWon = !imposterCaught || imposterGuessedWord;
+    const imposterLost = !imposterWon;
+
     if (!isImposter) {
       // CITIZEN SCORING
+      // 1. Correct choice/vote for Imposter: +1 point
       if (votedList.length > 0) {
         votedList.forEach((sId) => {
           if (imposterIds.includes(sId)) {
-            // Correct vote for Imposter: +4
-            pointsDelta += 4;
+            pointsDelta += 1;
             reasons.push({
-              bn: 'সঠিক ধাপ্পাবাজ শনাক্ত (+৪)',
-              en: 'Correct Imposter vote (+4)',
+              bn: 'সঠিক ধাপ্পাবাজ নির্বাচন (+১)',
+              en: 'Correct Imposter choice (+1)',
             });
-
-            // Extra +1 bonus if that voted Imposter is eliminated
-            if (effectiveEliminatedId === sId) {
-              pointsDelta += 1;
-              reasons.push({
-                bn: 'ধাপ্পাবাজ বহিষ্কার বোনাস (+১)',
-                en: 'Eliminated Imposter bonus (+1)',
-              });
-            }
           } else {
-            // Mistaken vote for Citizen: -1
+            // Mistaken vote for Citizen: -1 point
             pointsDelta -= 1;
             reasons.push({
               bn: 'নির্দোষকে ভুল ভোট (-১)',
@@ -87,7 +84,16 @@ export function calculateRoundScores({
         });
       }
 
-      // Citizen eliminated as unique highest-voted player: +3 consolation bonus
+      // 2. Imposter lose game: +4 points to citizens
+      if (imposterLost) {
+        pointsDelta += 4;
+        reasons.push({
+          bn: 'ধাপ্পাবাজ পরাজিত হওয়ায় নাগরিক জয় (+৪)',
+          en: 'Citizens bonus for Imposter defeat (+4)',
+        });
+      }
+
+      // 3. Citizen eliminated as unique highest-voted player: +3 consolation bonus
       if (effectiveEliminatedId === player.id) {
         pointsDelta += 3;
         reasons.push({
@@ -98,23 +104,19 @@ export function calculateRoundScores({
     } else {
       // IMPOSTER SCORING
       // Imposter's own vote has NO scoring impact (0 points, no penalty)
-
-      const isEliminated = effectiveEliminatedId === player.id;
-      const survivedOrGuessed = !isEliminated || imposterGuessedWord;
-
-      if (!survivedOrGuessed) {
-        // Imposter eliminated and failed final guess: exactly 0 points (no deduction)
+      if (imposterLost) {
+        // Imposter lose game: exactly 0 points (no deduction)
         pointsDelta = 0;
         reasons.push({
-          bn: 'ধাপ্পাবাজ ধরা পড়েছে (০ পয়েন্ট)',
-          en: 'Imposter caught and eliminated (0 pts)',
+          bn: 'ধাপ্পাবাজ পরাজিত (০ পয়েন্ট)',
+          en: 'Imposter defeated (0 pts)',
         });
       } else {
         // Imposter survived or won via final guess: +5 points
         pointsDelta += 5;
-        if (imposterGuessedWord && isEliminated) {
+        if (imposterGuessedWord) {
           reasons.push({
-            bn: 'শব্দ অনুমান করে জয়লাভ (+৫)',
+            bn: 'সঠিক শব্দ অনুমান করে জয়লাভ (+৫)',
             en: 'Won by guessing secret word (+5)',
           });
         } else {

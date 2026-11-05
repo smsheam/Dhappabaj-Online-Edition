@@ -168,6 +168,22 @@ export async function ensureAuthenticatedUser(forceFresh: boolean = false): Prom
   return authInitPromise;
 }
 
+// Sign out user completely (clears local session and Firebase auth state)
+export async function signOutUser(): Promise<void> {
+  try {
+    sessionStorage.removeItem('dhappabaj_session_name');
+    sessionStorage.removeItem('dhappabaj_session_avatar');
+    sessionStorage.removeItem('dhappabaj_name');
+    sessionStorage.removeItem('dhappabaj_avatar');
+    sessionStorage.removeItem('dhappabaj_active_room');
+    if (auth.currentUser) {
+      await signOut(auth);
+    }
+  } catch (error) {
+    console.error('Sign out error:', error);
+  }
+}
+
 // Reset to a completely fresh session (clears lingering stored names/active rooms/anonymous UID)
 export async function resetToFreshSession(): Promise<User> {
   try {
