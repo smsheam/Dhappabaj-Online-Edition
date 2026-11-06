@@ -1,5 +1,41 @@
 import { Player, RoundScoreDetail, WordItem } from '../types/game';
 
+export interface GameScoringConfig {
+  citizenCorrectVotePoints: number;
+  citizenWrongVotePoints: number;
+  citizenImposterLossBonus: number;
+  citizenConsolationPoints: number;
+  imposterWinPoints: number;
+  imposterZeroVotesBonus: number;
+  imposterLossPoints: number;
+}
+
+export const DEFAULT_SCORING_CONFIG: GameScoringConfig = {
+  citizenCorrectVotePoints: 1,
+  citizenWrongVotePoints: -1,
+  citizenImposterLossBonus: 4,
+  citizenConsolationPoints: 3,
+  imposterWinPoints: 5,
+  imposterZeroVotesBonus: 3,
+  imposterLossPoints: 0,
+};
+
+const SCORING_STORAGE_KEY = 'dhappabaj_scoring_config_v1';
+
+export function getActiveScoringConfig(): GameScoringConfig {
+  try {
+    const raw = localStorage.getItem(SCORING_STORAGE_KEY);
+    if (raw) return { ...DEFAULT_SCORING_CONFIG, ...JSON.parse(raw) };
+  } catch {}
+  return DEFAULT_SCORING_CONFIG;
+}
+
+export function saveActiveScoringConfig(config: GameScoringConfig) {
+  try {
+    localStorage.setItem(SCORING_STORAGE_KEY, JSON.stringify(config));
+  } catch {}
+}
+
 export interface ScoreCalculationInput {
   players: Player[];
   imposterIds: string[];
@@ -7,6 +43,7 @@ export interface ScoreCalculationInput {
   word: WordItem;
   eliminatedPlayerId?: string | null;
   imposterGuessedWord?: boolean;
+  scoringConfig?: GameScoringConfig;
 }
 
 export function calculateRoundScores({
@@ -15,7 +52,10 @@ export function calculateRoundScores({
   votes,
   eliminatedPlayerId,
   imposterGuessedWord = false,
+  scoringConfig,
 }: ScoreCalculationInput): RoundScoreDetail[] {
+  const cfg = scoringConfig || getActiveScoringConfig() || DEFAULT_SCORING_CONFIG;
+
   // Count how many votes each player received
   const voteCountMap: Record<string, number> = {};
   players.forEach((p) => {
@@ -64,74 +104,74 @@ export function calculateRoundScores({
 
     if (!isImposter) {
       // CITIZEN SCORING
-      // 1. Correct choice/vote for Imposter: +1 point
+      // 1. Correct choice/vote for Imposter
       if (votedList.length > 0) {
         votedList.forEach((sId) => {
           if (imposterIds.includes(sId)) {
-            pointsDelta += 1;
+            pointsDelta += cfg.citizenCorrectVotePoints;
             reasons.push({
-              bn: 'সঠিক ধাপ্পাবাজ নির্বাচন (+১)',
-              en: 'Correct Imposter choice (+1)',
+              bn: `সঠিক ধাপ্পাবাজ নির্বাচন (+${cfg.citizenCorrectVotePoints})`,
+              en: `Correct Imposter choice (+${cfg.citizenCorrectVotePoints})`,
             });
           } else {
-            // Mistaken vote for Citizen: -1 point
-            pointsDelta -= 1;
+            // Mistaken vote for Citizen
+            pointsDelta += cfg.citizenWrongVotePoints;
             reasons.push({
-              bn: 'নির্দোষকে ভুল ভোট (-১)',
-              en: 'Wrong vote on Citizen (-1)',
+              bn: `নির্দোষকে ভুল ভোট (${cfg.citizenWrongVotePoints})`,
+              en: `Wrong vote on Citizen (${cfg.citizenWrongVotePoints})`,
             });
           }
         });
       }
 
-      // 2. Imposter lose game: +4 points to citizens
+      // 2. Imposter lose game: citizen bonus
       if (imposterLost) {
-        pointsDelta += 4;
+        pointsDelta += cfg.citizenImposterLossBonus;
         reasons.push({
-          bn: 'ধাপ্পাবাজ পরাজিত হওয়ায় নাগরিক জয় (+৪)',
-          en: 'Citizens bonus for Imposter defeat (+4)',
+          bn: `ধাপ্পাবাজ পরাজিত হওয়ায় নাগরিক জয় (+${cfg.citizenImposterLossBonus})`,
+          en: `Citizens bonus for Imposter defeat (+${cfg.citizenImposterLossBonus})`,
         });
       }
 
-      // 3. Citizen eliminated as unique highest-voted player: +3 consolation bonus
+      // 3. Citizen eliminated as unique highest-voted player: consolation bonus
       if (effectiveEliminatedId === player.id) {
-        pointsDelta += 3;
+        pointsDelta += cfg.citizenConsolationPoints;
         reasons.push({
-          bn: 'নির্দোষ হয়ে বহিষ্কৃত হওয়ার সান্ত্বনা বোনাস (+৩)',
-          en: 'Wrongly eliminated Citizen bonus (+3)',
+          bn: `নির্দোষ হয়ে বহিষ্কৃত হওয়ার সান্ত্বনা বোনাস (+${cfg.citizenConsolationPoints})`,
+          en: `Wrongly eliminated Citizen bonus (+${cfg.citizenConsolationPoints})`,
         });
       }
     } else {
       // IMPOSTER SCORING
       // Imposter's own vote has NO scoring impact (0 points, no penalty)
       if (imposterLost) {
-        // Imposter lose game: exactly 0 points (no deduction)
-        pointsDelta = 0;
+        // Imposter lose game: exactly imposterLossPoints (0 points)
+        pointsDelta = cfg.imposterLossPoints;
         reasons.push({
-          bn: 'ধাপ্পাবাজ পরাজিত (০ পয়েন্ট)',
-          en: 'Imposter defeated (0 pts)',
+          bn: `ধাপ্পাবাজ পরাজিত (${cfg.imposterLossPoints} পয়েন্ট)`,
+          en: `Imposter defeated (${cfg.imposterLossPoints} pts)`,
         });
       } else {
-        // Imposter survived or won via final guess: +5 points
-        pointsDelta += 5;
+        // Imposter survived or won via final guess
+        pointsDelta += cfg.imposterWinPoints;
         if (imposterGuessedWord) {
           reasons.push({
-            bn: 'সঠিক শব্দ অনুমান করে জয়লাভ (+৫)',
-            en: 'Won by guessing secret word (+5)',
+            bn: `সঠিক শব্দ অনুমান করে জয়লাভ (+${cfg.imposterWinPoints})`,
+            en: `Won by guessing secret word (+${cfg.imposterWinPoints})`,
           });
         } else {
           reasons.push({
-            bn: 'ধাপ্পাবাজের সফল জয় (+৫)',
-            en: 'Imposter survived and won (+5)',
+            bn: `ধাপ্পাবাজের সফল জয় (+${cfg.imposterWinPoints})`,
+            en: `Imposter survived and won (+${cfg.imposterWinPoints})`,
           });
         }
 
-        // Additional +3 bonus if Imposter received ZERO votes
+        // Additional bonus if Imposter received ZERO votes
         if (votesReceived === 0) {
-          pointsDelta += 3;
+          pointsDelta += cfg.imposterZeroVotesBonus;
           reasons.push({
-            bn: 'কোনো ভোট না পাওয়ার বোনাস (+৩)',
-            en: 'Zero votes received bonus (+3)',
+            bn: `কোনো ভোট না পাওয়ার বোনাস (+${cfg.imposterZeroVotesBonus})`,
+            en: `Zero votes received bonus (+${cfg.imposterZeroVotesBonus})`,
           });
         }
       }

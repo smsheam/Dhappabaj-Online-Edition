@@ -20,6 +20,54 @@ service cloud.firestore {
         get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId == request.auth.uid;
     }
 
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email != null && (
+          request.auth.token.email.lower() == 'smsheam1@gmail.com' ||
+          request.auth.token.email.lower() == 's m sheam1@gmail.com'
+        )) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/roles/$(request.auth.uid))
+      );
+    }
+
+    // Dynamic game configuration (Custom words, Quick chats, Scoring rules, Game texts)
+    match /game_config/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Health ping
+    match /system_health/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Registered and Guest Player Profiles
+    match /users/{userId} {
+      allow get, list: if isSignedIn();
+      allow create, update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Role & Permissions records (Owner and Editors)
+    match /roles/{userId} {
+      allow get, list: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Admin records
+    match /admins/{adminId} {
+      allow get, list: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Completed Match History records
+    match /match_history/{matchId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
     // Room collection
     match /rooms/{roomId} {
       allow get: if isSignedIn() && isValidId(roomId);
@@ -32,13 +80,12 @@ service cloud.firestore {
       // Update room: host can update any room state, or players can update phase/round state when permitted
       allow update: if isSignedIn() && isValidId(roomId);
 
-      // Delete room: only host
-      allow delete: if isRoomHost(roomId);
+      // Delete room: host or super admin
+      allow delete: if isRoomHost(roomId) || isAdmin();
 
       // Players subcollection
       match /players/{playerId} {
         allow get: if isSignedIn() && isValidId(roomId) && isValidId(playerId);
-        // Note: For list operations on the collection, playerId path variable does not exist yet
         allow list: if isSignedIn() && isValidId(roomId);
 
         // Player joins as themselves
@@ -47,11 +94,11 @@ service cloud.firestore {
 
         // Player updates their own status/name/ready/clue/hasSeenCard, or host updates scores
         allow update: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
-          (request.auth.uid == playerId || isRoomHost(roomId));
+          (request.auth.uid == playerId || isRoomHost(roomId) || isAdmin());
 
         // Player can leave, or host can kick
         allow delete: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
-          (request.auth.uid == playerId || isRoomHost(roomId));
+          (request.auth.uid == playerId || isRoomHost(roomId) || isAdmin());
       }
 
       // Private role and word subcollection (strictly guarded)
@@ -64,20 +111,19 @@ service cloud.firestore {
         // Writing role assignments is done by the host when round starts
         allow create, update: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
           (isRoomHost(roomId) || request.auth.uid == playerId);
-        allow delete: if isRoomHost(roomId);
+        allow delete: if isRoomHost(roomId) || isAdmin();
       }
 
       // Votes subcollection
       match /votes/{playerId} {
         allow get: if isSignedIn() && isValidId(roomId) && isValidId(playerId);
-        // Note: For list operations on the collection, playerId path variable does not exist yet
         allow list: if isSignedIn() && isValidId(roomId);
 
         // Only the voter can cast or update their own vote
         allow create, update: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
           request.auth.uid == playerId;
         allow delete: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
-          (request.auth.uid == playerId || isRoomHost(roomId));
+          (request.auth.uid == playerId || isRoomHost(roomId) || isAdmin());
       }
 
       // Live discussion messages subcollection
@@ -86,7 +132,7 @@ service cloud.firestore {
         allow list: if isSignedIn() && isValidId(roomId);
         allow create: if isSignedIn() && isValidId(roomId) && isValidId(messageId) &&
           request.resource.data.senderId == request.auth.uid;
-        allow update, delete: if isRoomHost(roomId);
+        allow update, delete: if isRoomHost(roomId) || isAdmin();
       }
     }
   }

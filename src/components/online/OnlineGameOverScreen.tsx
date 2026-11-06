@@ -1,10 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { Trophy, RotateCcw, Home, Crown, Sparkles, AlertTriangle } from 'lucide-react';
 import { Language, Theme } from '../../types/game';
 import { OnlinePlayer, OnlineRoomData } from '../../types/multiplayer';
 import { setOnlineRoomPhase } from '../../services/multiplayerService';
 import { sound } from '../../utils/audio';
+import { calculateFunnyAwards, MatchContextStats } from '../../utils/funnyAwards';
+import { FunnyAwardsSection } from '../FunnyAwardsSection';
+import { saveCompletedMatch } from '../../services/matchHistoryService';
+import { recordPlayerMatchStats } from '../../services/userService';
 
 interface OnlineGameOverScreenProps {
   room: OnlineRoomData;
@@ -25,9 +29,104 @@ export const OnlineGameOverScreen: React.FC<OnlineGameOverScreenProps> = ({
   const isEn = lang === 'en';
   const isHost = currentPlayer.isHost;
   const [showExitWarning, setShowExitWarning] = useState<boolean>(false);
+  const hasSavedMatchRef = useRef<boolean>(false);
 
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
   const champion = sortedPlayers[0];
+
+  const awards = useMemo(() => {
+    const revealedImposterIds = room.revealedImposterIds || [];
+    const scoreMap = new Map((room.scoreDetails || []).map((sd) => [sd.playerId, sd]));
+    const context: MatchContextStats = {
+      players: players.map((p) => {
+        const sd = scoreMap.get(p.id);
+        const isImp = revealedImposterIds.includes(p.id) || Boolean(sd?.isImposter);
+        const votes = sd ? sd.votesReceived : 0;
+        return {
+          id: p.id,
+          name: p.name,
+          role: isImp ? 'imposter' : 'innocent',
+          score: p.score || 0,
+          votesReceived: votes,
+          wasEliminated: room.eliminatedPlayerId === p.id,
+        };
+      }),
+      imposterIds: revealedImposterIds,
+      winnerTeam: room.winner === 'imposter' ? 'imposter' : 'innocents',
+      eliminatedPlayerId: room.eliminatedPlayerId,
+    };
+    return calculateFunnyAwards(context);
+  }, [players, room]);
+
+  useEffect(() => {
+    // Record lifetime stats for current player
+    if (currentPlayer && currentPlayer.id) {
+      const revealedImposterIds = room.revealedImposterIds || [];
+      const scoreMap = new Map((room.scoreDetails || []).map((sd) => [sd.playerId, sd]));
+      const sd = scoreMap.get(currentPlayer.id);
+      const isImposter = revealedImposterIds.includes(currentPlayer.id) || Boolean(sd?.isImposter);
+      const isWin = (room.winner === 'imposter' && isImposter) || (room.winner !== 'imposter' && !isImposter);
+      recordPlayerMatchStats(
+        currentPlayer.id,
+        currentPlayer.score || 0,
+        isImposter ? 'imposter' : 'innocent',
+        isWin,
+        sd ? sd.votesReceived : 0,
+        Boolean(sd?.reasons?.some((r) => r.en.includes('Correct'))),
+        room.eliminatedPlayerId === currentPlayer.id
+      ).catch(() => {});
+    }
+
+    // Save completed match record
+    if (isHost && !hasSavedMatchRef.current) {
+      hasSavedMatchRef.current = true;
+      const revealedImposterIds = room.revealedImposterIds || [];
+      const scoreMap = new Map((room.scoreDetails || []).map((sd) => [sd.playerId, sd]));
+      saveCompletedMatch({
+        id: room.currentMatchId || `${room.roomCode}_${Date.now()}`,
+        matchId: room.currentMatchId || `${room.roomCode}_${Date.now()}`,
+        roomCode: room.roomCode,
+        mode: 'online',
+        completedAt: Date.now(),
+        totalRounds: room.totalRounds || 1,
+        winnerTeam: room.winner === 'imposter' ? 'imposter' : 'innocents',
+        imposterIds: revealedImposterIds,
+        players: players.map((p) => {
+          const sd = scoreMap.get(p.id);
+          const isImp = revealedImposterIds.includes(p.id) || Boolean(sd?.isImposter);
+          return {
+            id: p.id,
+            name: p.name,
+            avatar: p.avatar || '🕵️',
+            titleBn: p.titleBn || '',
+            titleEn: p.titleEn || '',
+            role: isImp ? 'imposter' : 'innocent',
+            score: p.score || 0,
+            votesReceived: sd ? sd.votesReceived : 0,
+          };
+        }),
+        wordsPlayed: room.revealedWord
+          ? [
+              {
+                wordBn: room.revealedWord.wordBn,
+                wordEn: room.revealedWord.wordEn,
+                category: room.revealedWord.category,
+              },
+            ]
+          : [],
+        awardsGiven: awards.map((a) => ({
+          awardId: a.id,
+          awardNameBn: a.nameBn,
+          awardNameEn: a.nameEn,
+          icon: a.icon,
+          playerId: a.recipientId,
+          playerName: a.recipientName,
+          reasonBn: a.reasonBn,
+          reasonEn: a.reasonEn,
+        })),
+      }).catch(() => {});
+    }
+  }, [currentPlayer, isHost, room, players, awards]);
 
   useEffect(() => {
     sound.playVictory();
@@ -144,6 +243,9 @@ export const OnlineGameOverScreen: React.FC<OnlineGameOverScreenProps> = ({
             </div>
           ))}
         </div>
+
+        {/* Humorous Special Awards */}
+        <FunnyAwardsSection awards={awards} lang={lang} />
       </div>
 
       {/* Footer */}

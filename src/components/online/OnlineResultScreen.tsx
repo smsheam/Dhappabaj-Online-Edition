@@ -4,15 +4,15 @@ import {
   Trophy,
   Award,
   ArrowRight,
-  UserX,
-  CheckCircle,
-  HelpCircle,
   Vote,
   Sparkles,
   AlertTriangle,
   Clock,
   ShieldCheck,
   MessageSquare,
+  CheckCircle2,
+  XCircle,
+  HelpCircle,
 } from 'lucide-react';
 import { Language, Theme } from '../../types/game';
 import { OnlinePlayer, OnlineRoomData } from '../../types/multiplayer';
@@ -34,7 +34,6 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
   lang,
 }) => {
   const isEn = lang === 'en';
-  const isHost = currentPlayer.isHost;
 
   const eliminatedPlayer = players.find((p) => p.id === room.eliminatedPlayerId);
   const imposterIds = room.revealedImposterIds || [];
@@ -42,7 +41,7 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
   const isEliminatedImposter = eliminatedPlayer ? imposterIds.includes(eliminatedPlayer.id) : false;
   const isImposterWin = room.winner === 'imposter';
 
-  // Auto progression countdown to scoreboard (Requirement 1: 20 seconds)
+  // Auto progression countdown to scoreboard (20 seconds)
   const [autoTimer, setAutoTimer] = useState<number>(() => {
     if (room.phaseEndsAt) {
       const remaining = Math.ceil((room.phaseEndsAt - Date.now()) / 1000);
@@ -88,13 +87,30 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
     return () => clearInterval(interval);
   }, [room.roomCode]);
 
+  // Vote map: voterId -> suspectId or suspectIds
+  const revealedVotes = room.revealedVotes || {};
+
+  // Count votes received per player
+  const voteCountMap: Record<string, number> = {};
+  players.forEach((p) => {
+    voteCountMap[p.id] = 0;
+  });
+  Object.values(revealedVotes).forEach((suspectVal) => {
+    const list = Array.isArray(suspectVal) ? suspectVal : suspectVal ? [suspectVal] : [];
+    list.forEach((sId) => {
+      if (voteCountMap[sId] !== undefined) {
+        voteCountMap[sId]++;
+      }
+    });
+  });
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between p-3.5 sm:p-6 max-w-3xl mx-auto transition-colors duration-200">
       {/* Top Banner */}
       <div className="text-center space-y-1">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400">
           <Trophy className="w-3.5 h-3.5" />
-          <span>{isEn ? `Round ${room.currentRound} Results` : `${room.currentRound}ম রাউন্ডের চূড়ান্ত ফলাফল`}</span>
+          <span>{isEn ? `Round ${room.currentRound} Reveal` : `${room.currentRound}ম রাউন্ডের পরিচয় উন্মোচন`}</span>
         </div>
         <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
           {isImposterWin
@@ -109,13 +125,13 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
 
       {/* Main Results Container */}
       <div className="my-3 space-y-3.5">
-        {/* Requirement 6: Reveal Who was Dhappabaj & What was his clue */}
+        {/* 1. Who is Imposter, his secret hint & his provided clue */}
         <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-rose-950/40 via-slate-900/90 to-rose-950/30 border-2 border-rose-500/60 shadow-xl space-y-3">
           <div className="flex items-center justify-between border-b border-rose-500/30 pb-2">
             <div className="flex items-center gap-2">
               <span className="text-xl">🕵️</span>
               <h3 className="text-sm font-black text-rose-400 uppercase tracking-wider">
-                {isEn ? 'The Real Dhappabaj (Imposter)' : 'আসল ধাপ্পাবাজ পরিচয় ও ক্লু'}
+                {isEn ? 'The Real Dhappabaj (Imposter)' : 'আসল ধাপ্পাবাজ পরিচয় ও ইঙ্গিত'}
               </h3>
             </div>
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white shadow-xs">
@@ -125,10 +141,12 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
 
           <div className="space-y-3">
             {imposters.map((imp) => {
-              const clueHeGotBn = room.revealedWord?.shortHintBn || room.revealedWord?.hintBn || 'ক্যাটাগরি সম্পর্কিত ইঙ্গিত';
-              const clueHeGotEn = room.revealedWord?.shortHintEn || room.revealedWord?.hintEn || 'Category hint';
+              const clueHeGotBn =
+                room.revealedWord?.shortHintBn || room.revealedWord?.hintBn || 'ক্যাটাগরি সম্পর্কিত ইঙ্গিত';
+              const clueHeGotEn =
+                room.revealedWord?.shortHintEn || room.revealedWord?.hintEn || 'Category hint';
               const clueHeGot = isEn ? clueHeGotEn : clueHeGotBn;
-              const clueHeProvided = imp.clue || (isEn ? 'No clue provided' : 'কোনো ক্লু দেননি');
+              const clueHeProvided = imp.clue || (isEn ? 'No clue given' : 'কোনো ক্লু দেননি');
 
               return (
                 <div
@@ -152,24 +170,24 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
                     </span>
                   </div>
 
-                  {/* Dual Clues: The Clue Dhappabaj GOT + The Clue Dhappabaj PROVIDED */}
+                  {/* Dual Clues: Clue Imposter Got + Clue Imposter Provided */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                    {/* 1. Clue / Secret Hint Dhappabaj Got */}
+                    {/* Clue / Secret Hint Dhappabaj Got */}
                     <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-1">
                       <div className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
                         <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                        <span>{isEn ? 'The Clue / Hint Dhappabaj Got:' : 'ধাপ্পাবাজ যে গোপন ইঙ্গিতটি পেয়েছিল:'}</span>
+                        <span>{isEn ? 'Secret Hint Imposter Received:' : 'ধাপ্পাবাজ যে গোপন ইঙ্গিতটি পেয়েছিল:'}</span>
                       </div>
                       <div className="text-sm sm:text-base font-black text-amber-200">
                         "{clueHeGot}"
                       </div>
                     </div>
 
-                    {/* 2. Clue Dhappabaj Provided in Game */}
+                    {/* Clue Dhappabaj Provided in Game */}
                     <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 space-y-1">
                       <div className="text-[10px] font-bold text-rose-300 uppercase tracking-wider flex items-center gap-1.5">
                         <MessageSquare className="w-3.5 h-3.5 text-rose-400" />
-                        <span>{isEn ? 'Clue Dhappabaj Provided in Game:' : 'ধাপ্পাবাজ খেলায় যে ক্লু দিয়েছিল:'}</span>
+                        <span>{isEn ? 'Clue Imposter Provided in Game:' : 'ধাপ্পাবাজ খেলায় যে ক্লু দিয়েছিল:'}</span>
                       </div>
                       <div className="text-sm sm:text-base font-black text-rose-100">
                         "{clueHeProvided}"
@@ -182,26 +200,71 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
           </div>
         </div>
 
-        {/* Requirement 6: Mention Player Selected / Accused by Majority Vote */}
+        {/* 2. Actual Secret Word & Actual Hints */}
+        {room.revealedWord && (
+          <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-md space-y-2 text-center">
+            <div className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+              {isEn ? 'Actual Secret Word & Hints' : 'এই রাউন্ডের আসল গোপন শব্দ ও ইঙ্গিত'}
+            </div>
+            <div className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white">
+              {room.revealedWord.wordBn}
+            </div>
+            <div className="text-sm font-bold text-amber-600 dark:text-amber-400">
+              {room.revealedWord.wordEn}
+            </div>
+
+            <div className="pt-2 flex flex-wrap items-center justify-center gap-2 text-xs">
+              <span className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 font-semibold text-slate-600 dark:text-slate-300">
+                {isEn ? 'Category: ' : 'ক্যাটাগরি: '}{room.revealedWord.category}
+              </span>
+              <span className="px-3 py-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 font-semibold border border-amber-500/20">
+                {isEn ? 'Hint: ' : 'আসল ইঙ্গিত: '}{isEn ? (room.revealedWord.hintEn || room.revealedWord.shortHintEn) : (room.revealedWord.hintBn || room.revealedWord.shortHintBn)}
+              </span>
+            </div>
+
+            {/* Imposter guess result if applicable */}
+            {room.imposterGuessedWord !== undefined && room.imposterGuessAnswer && (
+              <div className="mt-2 p-2.5 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs">
+                <span className="font-bold text-slate-600 dark:text-slate-400">
+                  {isEn ? 'Imposter Word Guess: ' : 'ধাপ্পাবাজের শব্দ অনুমান: '}
+                </span>
+                <span className="font-bold text-amber-500">"{room.imposterGuessAnswer}"</span>
+                <span className="ml-2 font-bold">
+                  {room.imposterGuessedWord
+                    ? isEn ? '✓ Correct! Stole the victory!' : '✓ সঠিক শব্দ অনুমান করে জয় ছিনিয়ে নিয়েছে!'
+                    : isEn ? '✗ Wrong guess!' : '✗ ভুল অনুমান!'}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3. Elimination Status: If innocent eliminated, show clearly! */}
         <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-md space-y-3">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
             <div className="flex items-center gap-2">
               <Vote className="w-4 h-4 text-amber-500" />
               <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200">
-                {isEn ? 'Player Selected by Majority Vote' : 'ভোটের মাধ্যমে অভিযুক্ত খেলোয়াড়'}
+                {isEn ? 'Majority Vote Accusation & Elimination' : 'ভোটের রায় ও বহিষ্কারের ফলাফল'}
               </h3>
             </div>
           </div>
 
           {eliminatedPlayer ? (
-            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+            <div
+              className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left ${
+                isEliminatedImposter
+                  ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-950 dark:text-emerald-100'
+                  : 'bg-rose-500/10 border-rose-500/40 text-rose-950 dark:text-rose-100'
+              }`}
+            >
               <div className="flex items-center gap-3 min-w-0">
                 <span className="text-3xl shrink-0">{eliminatedPlayer.avatar || '🕵️'}</span>
                 <div>
-                  <div className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+                  <div className="text-base font-black">
                     {eliminatedPlayer.name}
                   </div>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-xs opacity-75">
                     {isEn ? eliminatedPlayer.titleEn : eliminatedPlayer.titleBn}
                   </div>
                 </div>
@@ -209,164 +272,120 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
 
               <div>
                 {isEliminatedImposter ? (
-                  <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black bg-emerald-500 text-slate-950 shadow-md">
-                    <CheckCircle className="w-4 h-4 text-slate-950" />
-                    <span>{isEn ? '✓ Correct! Dhappabaj Caught' : '✓ সঠিক! ধাপ্পাবাজ ধরা পড়েছে'}</span>
+                  <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-black bg-emerald-500 text-slate-950 shadow-md">
+                    <CheckCircle2 className="w-4 h-4 text-slate-950" />
+                    <span>{isEn ? '✓ Dhappabaj Caught & Eliminated!' : '✓ সঠিক শনাক্তকরণ! ধাপ্পাবাজ বহিষ্কৃত'}</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black bg-rose-500 text-white shadow-md">
-                    <AlertTriangle className="w-4 h-4" />
-                    <span>{isEn ? '✗ False Accusation! Was Innocent' : '✗ ভুল অভিযোগ! নির্দোষ নাগরিক ছিলেন'}</span>
+                  <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-black bg-rose-500 text-white shadow-md animate-pulse">
+                    <XCircle className="w-4 h-4" />
+                    <span>{isEn ? '❌ Innocent Citizen Wrongly Eliminated!' : '❌ ভুল বিচার! নির্দোষ নাগরিককে ফাঁসিয়ে বহিষ্কার করা হয়েছে'}</span>
                   </span>
                 )}
               </div>
             </div>
           ) : (
-            <div className="py-2 text-center text-xs font-bold text-slate-500">
+            <div className="py-3 text-center text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
               {isEn
-                ? 'Vote was tied! Nobody received a clear majority.'
-                : 'ভোট সমান হওয়ায় কোনো একক খেলোয়াড়কে নির্বাচন করা হয়নি।'}
-            </div>
-          )}
-
-          {/* Secret Word Revealed */}
-          {room.revealedWord && (
-            <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-center space-y-0.5">
-              <div className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
-                {isEn ? 'Secret Word for the Round' : 'এই রাউন্ডের আসল গোপন শব্দ'}
-              </div>
-              <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-                {room.revealedWord.wordBn}
-              </div>
-              <div className="text-xs font-bold text-amber-600 dark:text-amber-400">
-                {room.revealedWord.wordEn}
-              </div>
-            </div>
-          )}
-
-          {/* Imposter guess result if applicable */}
-          {room.imposterGuessedWord !== undefined && room.imposterGuessAnswer && (
-            <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-center sm:text-left">
-              <span className="font-bold text-slate-600 dark:text-slate-400">
-                {isEn ? 'Imposter Guess: ' : 'ধাপ্পাবাজের অনুমান: '}
-              </span>
-              <span className="font-bold text-amber-500">"{room.imposterGuessAnswer}"</span>
-              <span className="ml-2 font-bold">
-                {room.imposterGuessedWord
-                  ? isEn ? '✓ Correct! Stole the victory!' : '✓ সঠিক শব্দ অনুমান করে জয় ছিনিয়ে নিয়েছে!'
-                  : isEn ? '✗ Wrong guess!' : '✗ ভুল অনুমান!'}
-              </span>
+                ? '⚖️ Tie Vote! Nobody received a clear majority to be eliminated.'
+                : '⚖️ ভোটে টাই হয়েছে! কোনো একক খেলোয়াড় সংখ্যাগরিষ্ঠ ভোট না পাওয়ায় কেউ বহিষ্কৃত হননি।'}
             </div>
           )}
         </div>
 
-        {/* Detailed Points Breakdown Section (Requirement 7) */}
-        <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+        {/* 4. Who Voted to Who (Detailed Voting Matrix - Without Scores!) */}
+        <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-md space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
-              <Award className="w-4 h-4 text-amber-500" />
+              <Vote className="w-4 h-4 text-amber-500" />
               <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                {isEn ? 'Round Points Breakdown & Reasons' : 'এই রাউন্ডের পয়েন্ট হিসাব ও কারণ'}
+                {isEn ? 'Voting Breakdown: Who Voted for Whom' : 'কার ভোট কার প্রতি ছিল (সম্পূর্ণ ভোটের তালিকা)'}
               </h3>
             </div>
             <span className="text-xs text-slate-400 font-medium">
-              {isEn ? 'All Players' : 'সকল খেলোয়াড়'}
+              {players.length} {isEn ? 'Players' : 'জন খেলোয়াড়'}
             </span>
           </div>
 
-          {room.scoreDetails && room.scoreDetails.length > 0 ? (
-            <div className="space-y-2.5 max-h-[34vh] overflow-y-auto p-1">
-              {room.scoreDetails.map((detail) => {
-                const isMe = detail.playerId === currentPlayer.id;
-                const isImp = imposterIds.includes(detail.playerId);
-                const votedSuspect = players.find((p) => p.id === detail.votedForId);
+          <div className="space-y-2 max-h-[38vh] overflow-y-auto p-1">
+            {players.map((voter) => {
+              const isVoterImposter = imposterIds.includes(voter.id);
+              const rawVote = revealedVotes[voter.id];
+              const votedIds = Array.isArray(rawVote) ? rawVote : rawVote ? [rawVote] : [];
+              const votedPlayers = votedIds.map((id) => players.find((p) => p.id === id)).filter(Boolean) as OnlinePlayer[];
+              const isMe = voter.id === currentPlayer.id;
 
-                return (
-                  <div
-                    key={detail.playerId}
-                    className={`p-3 rounded-2xl border transition-all ${
-                      isMe
-                        ? 'bg-amber-500/10 border-amber-500/40 shadow-xs'
-                        : 'bg-slate-50 dark:bg-slate-950/70 border-slate-200 dark:border-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xl">{detail.playerAvatar || '🕵️'}</span>
-                        <div className="min-w-0">
-                          <span className="text-xs font-bold text-slate-900 dark:text-white truncate block">
-                            {detail.playerName} {isMe && (isEn ? '(You)' : '(আপনি)')}
+              return (
+                <div
+                  key={voter.id}
+                  className={`p-3 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-2.5 transition-all ${
+                    isMe
+                      ? 'bg-amber-500/10 border-amber-500/40 shadow-xs'
+                      : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800'
+                  }`}
+                >
+                  {/* Voter Info */}
+                  <div className="flex items-center gap-2.5 min-w-0 w-full sm:w-auto">
+                    <span className="text-xl shrink-0">{voter.avatar || '🕵️'}</span>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-slate-900 dark:text-white truncate flex items-center gap-1.5">
+                        <span>{voter.name} {isMe && (isEn ? '(You)' : '(আপনি)')}</span>
+                        {isVoterImposter ? (
+                          <span className="text-[10px] font-bold text-rose-500 bg-rose-500/15 px-1.5 py-0.5 rounded-full">
+                            🕵️ {isEn ? 'Imposter' : 'ধাপ্পাবাজ'}
                           </span>
-                          <span className="text-[10px] text-slate-400">
-                            {isImp
-                              ? isEn ? '🕵️ Dhappabaj' : '🕵️ ধাপ্পাবাজ'
-                              : isEn ? '🛡️ Citizen' : '🛡️ নাগরিক'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Points Delta Badge */}
-                      <div
-                        className={`px-3 py-1 rounded-xl font-mono text-xs sm:text-sm font-black ${
-                          detail.pointsDelta > 0
-                            ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
-                            : detail.pointsDelta < 0
-                            ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30'
-                            : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
-                        }`}
-                      >
-                        {detail.pointsDelta > 0 ? `+${detail.pointsDelta}` : detail.pointsDelta} {isEn ? 'pts' : 'পয়েন্ট'}
-                      </div>
-                    </div>
-
-                    {/* Breakdown Reasons list */}
-                    <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-slate-800/80">
-                      {detail.reasons && detail.reasons.length > 0 ? (
-                        detail.reasons.map((r, rIdx) => (
-                          <div
-                            key={rIdx}
-                            className="text-[11px] text-slate-600 dark:text-slate-300 flex items-center justify-between"
-                          >
-                            <span className="flex items-center gap-1">
-                              <span className="text-amber-500">•</span>
-                              <span>{isEn ? r.en : r.bn}</span>
-                            </span>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-[11px] text-slate-400">
-                          {isEn ? 'Standard participation' : 'অংশগ্রহণ'}
-                        </div>
-                      )}
-
-                      {/* Vote details */}
-                      <div className="text-[10px] text-slate-400 pt-0.5 flex items-center gap-2 flex-wrap">
-                        {votedSuspect && (
-                          <span>
-                            {isEn ? 'Voted for: ' : 'ভোট দিয়েছেন: '}
-                            <strong className="text-slate-600 dark:text-slate-300">{votedSuspect.name}</strong>
+                        ) : (
+                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded-full">
+                            🛡️ {isEn ? 'Citizen' : 'নাগরিক'}
                           </span>
                         )}
-                        <span>•</span>
-                        <span>
-                          {isEn ? 'Votes received: ' : 'ভোট পেয়েছেন: '}
-                          <strong className="text-slate-600 dark:text-slate-300">{detail.votesReceived || 0}</strong>
-                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        {isEn ? 'Received: ' : 'ভোট পেয়েছেন: '}
+                        <strong className="text-slate-600 dark:text-slate-300 font-mono">
+                          {voteCountMap[voter.id] || 0}
+                        </strong> {isEn ? 'votes' : 'ভোট'}
                       </div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-center py-4 text-xs text-slate-500">
-              {isEn ? 'Calculating point breakdown...' : 'পয়েন্ট হিসাব করা হচ্ছে...'}
-            </div>
-          )}
+
+                  {/* Arrow & Target */}
+                  <div className="flex items-center gap-1.5 self-end sm:self-center flex-wrap justify-end">
+                    <span className="text-xs text-slate-400 font-bold">➔</span>
+                    {votedPlayers.length > 0 ? (
+                      votedPlayers.map((target) => {
+                        const targetIsImposter = imposterIds.includes(target.id);
+                        return (
+                          <span
+                            key={target.id}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold border ${
+                              targetIsImposter
+                                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
+                                : 'bg-slate-200/80 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                            }`}
+                          >
+                            <span>{target.avatar || '🕵️'}</span>
+                            <span className="max-w-[100px] truncate">{target.name}</span>
+                            <span className="text-[10px]">
+                              {targetIsImposter ? '🎯' : '⚪'}
+                            </span>
+                          </span>
+                        );
+                      })
+                    ) : (
+                      <span className="text-xs text-slate-400 italic">
+                        {isEn ? '(No vote cast)' : '(ভোট দেননি)'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* Footer Navigation */}
+      {/* Footer: Proceed to Scoreboard (Scores are displayed in Scoreboard section) */}
       <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
         <button
           type="button"
@@ -376,8 +395,8 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
           <Award className="w-5 h-5" />
           <span>
             {isEn
-              ? `View Match Leaderboard (${autoTimer}s)`
-              : `ম্যাচের লিডারবোর্ড দেখুন (${autoTimer}s)`}
+              ? `Proceed to Scoreboard (${autoTimer}s)`
+              : `পয়েন্ট ও স্কোরবোর্ড পেজে যান (${autoTimer}s)`}
           </span>
           <ArrowRight className="w-5 h-5" />
         </button>
@@ -386,8 +405,8 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
           <Clock className="w-3 h-3" />
           <span>
             {isEn
-              ? `Automatically advancing to Leaderboard in ${autoTimer}s`
-              : `${autoTimer} সেকেন্ড পর স্বয়ংক্রিয়ভাবে লিডারবোর্ডে নিয়ে যাওয়া হবে`}
+              ? `Score breakdown & leaderboard will show on next page (${autoTimer}s)`
+              : `পয়েন্ট হিসাব ও লিডারবোর্ড পরবর্তী পেজে প্রদর্শিত হবে (${autoTimer}s)`}
           </span>
         </div>
       </div>

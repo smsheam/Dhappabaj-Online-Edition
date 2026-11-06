@@ -20,6 +20,7 @@ import {
   subscribeToChatMessages,
   CHAT_COOLDOWN_MS,
 } from '../../services/multiplayerService';
+import { getCustomQuickChats } from '../../services/adminService';
 import { sound } from '../../utils/audio';
 
 interface OnlineDiscussionScreenProps {
@@ -119,54 +120,11 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
     }
   };
 
+  const customQuickChats = getCustomQuickChats();
   const quickPhraseGroups = {
-    suspect: isEn
-      ? [
-          'You are the imposter! 🕵️',
-          'That clue is super suspicious! 🤔',
-          'Why are you looking at me?! 👀',
-          'Something is cooking here! 🍲',
-          'Guaranteed imposter caught! 🫵',
-          'Why so quiet? Confess! 🤐',
-        ]
-      : [
-          '১০০% শিওর এইটাই ধাপ্পাবাজ! 🫵',
-          'ক্লুটা তো পুরাই সন্দেহজনক! 🤔',
-          'আমার দিকে তাকাচ্ছেন কেন?! 👀',
-          'ডাল মে কুচ কালা হ্যায়! 🍲',
-          'ধরা খাইলে খবর আছে! 💀',
-          'কথা কম, কাজ বেশি! 🤐',
-        ],
-    defense: isEn
-      ? [
-          'I am 100% innocent citizen! 🛡️',
-          'I swear I am an innocent baby! 🍼',
-          "Don't vote me, you will regret! 🛑",
-          'I am telling the absolute truth! 💯',
-          "Don't waste vote on innocents! ⚠️",
-          'Trust me on this one! 🙏',
-        ]
-      : [
-          'বিশ্বাস করেন আমি নিষ্পাপ পাবলিক! 😇',
-          'আরে ধুর, আমি ১০০% নির্দোষ! 🛡️',
-          'আমাকে ভোট দিলে পরে আফসোস করবেন! 🛑',
-          'আমি কিন্তু একদম খাঁটি মানুষ! 💯',
-          'ভুল মানুষকে ভোট দিয়েন না! ⚠️',
-          'আমার উপর ভরসা রাখেন! 🙏',
-        ],
-    fun: isEn
-      ? [
-          'Imposter is trembling now! 😂',
-          'Lying is a bad habit! 🤫',
-          'Time is running out, decide! 🏃‍♂️',
-          'GG well played everyone! 🎯',
-        ]
-      : [
-          'ধাপ্পাবাজের হাত-পা কাঁপতেছে! 😂',
-          'মিথ্যা কথা বলা মহাপাপ ভাই 🤫',
-          'দেরি কেন? খেলা শুরু করো! 🚀',
-          'চোর পালালে বুদ্ধি বাড়ে 🏃‍♂️',
-        ],
+    suspect: customQuickChats.suspect.map((item) => (isEn ? item.en : item.bn)),
+    defense: customQuickChats.defense.map((item) => (isEn ? item.en : item.bn)),
+    fun: customQuickChats.fun.map((item) => (isEn ? item.en : item.bn)),
   };
 
   const quickEmojis = ['😂', '🤫', '👀', '🔥', '💀', '🕵️', '🤡', '🎯', '🍼', '🛑'];

@@ -111,25 +111,39 @@ export const RoleCardScreen: React.FC<RoleCardScreenProps> = ({
               </button>
             </div>
           ) : isImposter ? (
-            /* IMPOSTER: Shows "আপনি একজন ধাপ্পাবাজ", "আপনার জন্য Hints:", and Hard Cryptic Hint in LARGE text with English at bottom */
+            /* IMPOSTER: Shows "আপনি একজন ধাপ্পাবাজ", Category, and Cryptic Hint in LARGE text with English at bottom */
             <div className="py-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+              <div className="inline-block px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-500 font-mono text-xs font-bold">
+                🎭 {isEn ? 'ROLE: IMPOSTER' : 'ভূমিকা: ধাপ্পাবাজ'}
+              </div>
+
               <p className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400">
                 {isEn ? 'You are an Imposter' : 'আপনি একজন ধাপ্পাবাজ'}
               </p>
 
+              {/* Category Context for Imposter */}
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-300 font-semibold">
+                <span>📁 {isEn ? 'Category:' : 'ক্যাটাগরি:'}</span>
+                <span className="font-bold text-slate-900 dark:text-white">{word.category}</span>
+              </div>
+
               <div className="pt-2 space-y-3">
-                <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
-                  {isEn ? 'Your Hint:' : 'আপনার জন্য Hint:'}
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {isEn ? 'Your Only Clue / Hint:' : 'আপনার একমাত্র ইঙ্গিত (Hint):'}
                 </p>
-                <p className="text-4xl sm:text-5xl font-black text-amber-500 dark:text-amber-400 tracking-wide leading-tight">
-                  {isEn ? hardHint.en : hardHint.bn}
+                <p className="text-3xl sm:text-4xl font-black text-amber-500 dark:text-amber-400 tracking-wide leading-tight">
+                  "{isEn ? hardHint.en : hardHint.bn}"
                 </p>
 
-                {/* English hint at bottom as requested */}
-                <div className="pt-2">
-                  <p className="text-xs sm:text-sm font-mono text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-800/80 py-1.5 px-3 rounded-lg inline-block">
+                {/* English hint at bottom */}
+                <div className="pt-1">
+                  <p className="text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-800/80 py-1 px-2.5 rounded-lg inline-block">
                     {isEn ? `Bangla Hint: ${hardHint.bn}` : `Hint in English: ${hardHint.en}`}
                   </p>
+                </div>
+
+                <div className="text-[11px] text-rose-500/80 font-medium">
+                  ⚠️ {isEn ? 'Citizens do NOT see this hint. Blend in with discussion!' : 'নাগরিকরা এই ইঙ্গিত দেখেনি। আলোচনায় স্বাভাবিক থাকুন!'}
                 </div>
               </div>
             </div>

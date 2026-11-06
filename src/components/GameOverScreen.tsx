@@ -1,10 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import { Trophy, Crown, RotateCcw, Users, Sparkles } from 'lucide-react';
 import { Player, RoundResult, Language, Theme } from '../types/game';
 import { GameTopBar } from './GameTopBar';
 import { PlayerAvatar } from './PlayerAvatar';
 import { sound } from '../utils/audio';
+import { calculateFunnyAwards, MatchContextStats } from '../utils/funnyAwards';
+import { FunnyAwardsSection } from './FunnyAwardsSection';
 
 interface GameOverScreenProps {
   players: Player[];
@@ -37,6 +39,31 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
   const sorted = [...players].sort((a, b) => b.score - a.score);
   const winner = sorted[0];
   const winnerTitle = isEn ? winner?.titleEn : winner?.titleBn;
+
+  // Calculate awards based on pass & play rounds
+  const awards = useMemo(() => {
+    const lastRound = roundResults[roundResults.length - 1];
+    const imposterIds = lastRound ? lastRound.imposterIds : [];
+    const scoreMap = new Map((lastRound?.scoreDetails || []).map((sd) => [sd.playerId, sd]));
+    const context: MatchContextStats = {
+      players: players.map((p) => {
+        const sd = scoreMap.get(p.id);
+        const isImp = imposterIds.includes(p.id) || Boolean(sd?.isImposter);
+        const votesAgainst = sd ? sd.votesReceived : 0;
+        return {
+          id: p.id,
+          name: p.name,
+          role: isImp ? 'imposter' : 'innocent',
+          score: p.score,
+          votesReceived: votesAgainst,
+          wasEliminated: false,
+        };
+      }),
+      imposterIds,
+      winnerTeam: 'innocents',
+    };
+    return calculateFunnyAwards(context);
+  }, [players, roundResults]);
 
   useEffect(() => {
     sound.playSuccessChime();
@@ -203,6 +230,9 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
             })}
           </div>
         </div>
+
+        {/* Humorous Special Awards */}
+        <FunnyAwardsSection awards={awards} lang={lang} />
       </div>
 
       {/* Action Buttons */}

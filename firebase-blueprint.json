@@ -108,6 +108,20 @@
         "timestamp": { "type": "number" }
       },
       "required": ["id", "senderId", "senderName", "text", "timestamp"]
+    },
+    "CustomWord": {
+      "title": "CustomWord",
+      "description": "Custom word added by operator via master admin dashboard",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "wordBn": { "type": "string", "maxLength": 64 },
+        "wordEn": { "type": "string", "maxLength": 64 },
+        "hintBn": { "type": "string", "maxLength": 128 },
+        "hintEn": { "type": "string", "maxLength": 128 },
+        "category": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "wordBn", "wordEn", "hintBn", "category"]
     }
   },
   "firestore": {
@@ -130,6 +144,10 @@
     "/rooms/{roomId}/messages/{messageId}": {
       "schema": "Message",
       "description": "Live discussion messages"
+    },
+    "/game_config/custom_words/items/{wordId}": {
+      "schema": "CustomWord",
+      "description": "Custom words dynamically managed by admin"
     }
   }
 }

@@ -19,6 +19,20 @@ import { preloadWordImage } from './utils/wordImageService';
 import { OnlinePlayer, OnlineRoomData } from './types/multiplayer';
 import { OnlineJoinCreateModal } from './components/online/OnlineJoinCreateModal';
 import { OnlineGameContainer } from './components/online/OnlineGameContainer';
+import { AdminDashboardModal } from './components/admin/AdminDashboardModal';
+import { ProfileModal } from './components/profile/ProfileModal';
+import { AchievementsModal } from './components/achievements/AchievementsModal';
+import { SettingsModal } from './components/SettingsModal';
+import { UserProfile } from './types/user';
+import {
+  getUserProfile,
+  loginAsGuest,
+  subscribeToUserProfile,
+  updateProfileCustomization,
+} from './services/userService';
+import { isOwnerEmail, getUserRole } from './services/roleService';
+import { isUserAdmin } from './services/adminService';
+import { auth } from './firebase';
 import { Analytics } from '@vercel/analytics/react';
 
 const AVATAR_COLORS = [
@@ -77,9 +91,52 @@ export default function App() {
   const [roundResults, setRoundResults] = useState<RoundResult[]>([]);
   const [lastRoundResult, setLastRoundResult] = useState<RoundResult | null>(null);
 
-  // Global settings
+  // Global settings and profiles
   const [isRulesOpen, setIsRulesOpen] = useState<boolean>(false);
+  const [isAdminOpen, setIsAdminOpen] = useState<boolean>(false);
+  const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
+  const [isAchievementsOpen, setIsAchievementsOpen] = useState<boolean>(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(sound.getMuted());
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [canAccessAdmin, setCanAccessAdmin] = useState<boolean>(false);
+
+  // Initialize player profile & check admin permissions
+  useEffect(() => {
+    let unsubProfile: (() => void) | null = null;
+    const initUser = async () => {
+      try {
+        let profile = await loginAsGuest();
+        setUserProfile(profile);
+
+        const checkAdmin = async (prof: UserProfile | null) => {
+          const email = auth.currentUser?.email || prof?.email;
+          if (isOwnerEmail(email) || isUserAdmin()) {
+            setCanAccessAdmin(true);
+            return;
+          }
+          const roleInfo = await getUserRole(auth.currentUser?.uid, email || undefined);
+          setCanAccessAdmin(roleInfo.role === 'owner' || roleInfo.role === 'editor');
+        };
+
+        checkAdmin(profile);
+
+        unsubProfile = subscribeToUserProfile(profile.uid, (updated) => {
+          if (updated) {
+            setUserProfile(updated);
+            checkAdmin(updated);
+          }
+        });
+      } catch (err) {
+        console.warn('User profile initialization warning:', err);
+      }
+    };
+
+    initUser();
+    return () => {
+      if (unsubProfile) unsubProfile();
+    };
+  }, []);
 
   // Apply theme to document
   useEffect(() => {
@@ -293,8 +350,48 @@ export default function App() {
 
   return (
     <div className="bg-slate-50 dark:bg-slate-950 min-h-screen text-slate-900 dark:text-slate-100 selection:bg-amber-500/30 transition-colors duration-200">
-      {/* Rules Modal */}
+      {/* Rules & Admin Modals */}
       <RulesModal isOpen={isRulesOpen} onClose={() => setIsRulesOpen(false)} lang={lang} />
+      <AdminDashboardModal isOpen={isAdminOpen} onClose={() => setIsAdminOpen(false)} lang={lang} theme={theme} />
+
+      {/* Profile & Customization Modal */}
+      <ProfileModal
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        userProfile={userProfile}
+        onProfileUpdated={(updated) => setUserProfile(updated)}
+        lang={lang}
+        theme={theme}
+      />
+
+      {/* Achievements & Missions Modal */}
+      <AchievementsModal
+        isOpen={isAchievementsOpen}
+        onClose={() => setIsAchievementsOpen(false)}
+        userProfile={userProfile}
+        onEquipBadge={(badgeKey) => {
+          if (userProfile) {
+            updateProfileCustomization(userProfile.uid, { skinBadge: badgeKey }).then((p) => {
+              if (p) setUserProfile(p);
+            });
+          }
+        }}
+        lang={lang}
+        theme={theme}
+      />
+
+      {/* Global Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        lang={lang}
+        onToggleLang={handleToggleLang}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
+        isMuted={isMuted}
+        onToggleMute={handleToggleMute}
+        onOpenRules={() => setIsRulesOpen(true)}
+      />
 
       {/* Online Multiplayer Active Game Container */}
       {onlineRoom && onlinePlayer ? (
@@ -314,6 +411,7 @@ export default function App() {
             setPhase('INTRO');
             setIsOnlineModalOpen(true);
           }}
+          onOpenAdmin={() => setIsAdminOpen(true)}
         />
       ) : (
         <>
@@ -322,6 +420,12 @@ export default function App() {
             <IntroScreen
               onStartPassAndPlay={handleIntroStart}
               onOpenOnlineRoom={() => setIsOnlineModalOpen(true)}
+              onOpenAchievements={() => setIsAchievementsOpen(true)}
+              onOpenProfile={() => setIsProfileOpen(true)}
+              onOpenSettings={() => setIsSettingsOpen(true)}
+              onOpenAdmin={() => setIsAdminOpen(true)}
+              canAccessAdmin={canAccessAdmin}
+              userProfile={userProfile}
               lang={lang}
               onToggleLang={handleToggleLang}
               theme={theme}

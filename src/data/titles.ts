@@ -1,6 +1,7 @@
 export interface TitlePair {
   bn: string;
   en: string;
+  icon?: string;
 }
 
 export interface ScenePack {
@@ -12,27 +13,99 @@ export interface ScenePack {
   titles: TitlePair[];
 }
 
+/**
+ * 65+ Authentic Bangladeshi Professions for distinct, randomized player designations.
+ * Replaces the static cabinet/ministry theme with everyday familiar professions.
+ */
+export const BANGLADESHI_PROFESSIONS: TitlePair[] = [
+  { bn: 'প্রধান শিক্ষক 📚', en: 'Headmaster 📚' },
+  { bn: 'ডাক্তার 🩺', en: 'Doctor 🩺' },
+  { bn: 'সফটওয়্যার ইঞ্জিনিয়ার 💻', en: 'Software Engineer 💻' },
+  { bn: 'রিকশাচালক 🛺', en: 'Rickshaw Puller 🛺' },
+  { bn: 'অনুসন্ধানী সাংবাদিক 📰', en: 'Journalist 📰' },
+  { bn: 'পুলিশ অফিসার 👮‍♂️', en: 'Police Officer 👮‍♂️' },
+  { bn: 'ব্যবসায়ী 💼', en: 'Businessman 💼' },
+  { bn: 'কৃষক 🌾', en: 'Farmer 🌾' },
+  { bn: 'বিমান চালক (পাইলট) 👨‍✈️', en: 'Pilot 👨‍✈️' },
+  { bn: 'হাইকোর্টের আইনজীবী ⚖️', en: 'Lawyer ⚖️' },
+  { bn: 'ব্যাংকার 🏦', en: 'Banker 🏦' },
+  { bn: 'সিনিয়র নার্স 👩‍⚕️', en: 'Senior Nurse 👩‍⚕️' },
+  { bn: 'মুদি দোকানদার 🏪', en: 'Grocer 🏪' },
+  { bn: 'প্রধান বাবুর্চি / শেফ 👨‍🍳', en: 'Head Chef 👨‍🍳' },
+  { bn: 'চারুকলার চিত্রশিল্পী 🎨', en: 'Painter / Artist 🎨' },
+  { bn: 'সংগীতশিল্পী 🎤', en: 'Musician 🎤' },
+  { bn: 'ওয়েডিং ফটোগ্রাফার 📸', en: 'Photographer 📸' },
+  { bn: 'ইলেকট্রিশিয়ান 🔌', en: 'Electrician 🔌' },
+  { bn: 'কাঠমিস্ত্রি 🪚', en: 'Carpenter 🪚' },
+  { bn: 'দক্ষ দর্জি 🧵', en: 'Tailor 🧵' },
+  { bn: 'বাস ড্রাইভার 🚌', en: 'Bus Driver 🚌' },
+  { bn: 'সিএনজি চালক 🛵', en: 'CNG Driver 🛵' },
+  { bn: 'নৌকার মাঝি ⛵', en: 'Boatman ⛵' },
+  { bn: 'পদ্মার ইলিশ জেলে 🎣', en: 'Fisherman 🎣' },
+  { bn: 'রাজমিস্ত্রি 🧱', en: 'Mason 🧱' },
+  { bn: 'টংয়ের চা বিক্রেতা ☕', en: 'Tea Vendor ☕' },
+  { bn: 'চিঠির পিয়ন (পোস্টম্যান) ✉️', en: 'Postman ✉️' },
+  { bn: 'কবি ও সাহিত্যিক ✍️', en: 'Poet & Writer ✍️' },
+  { bn: 'বিজ্ঞানী ও গবেষক 🔬', en: 'Scientist 🔬' },
+  { bn: 'বিশ্ববিদ্যালয় অধ্যাপক 🎓', en: 'Professor 🎓' },
+  { bn: 'চার্টার্ড অ্যাকাউন্ট্যান্ট 📊', en: 'Chartered Accountant 📊' },
+  { bn: 'স্থপতি (আর্কিটেক্ট) 📐', en: 'Architect 📐' },
+  { bn: 'ফায়ার ফাইটার 🚒', en: 'Firefighter 🚒' },
+  { bn: 'জেলা জজ 👨‍⚖️', en: 'Judge 👨‍⚖️' },
+  { bn: 'কাস্টমস অফিসার 🛂', en: 'Customs Officer 🛂' },
+  { bn: 'রাইডার / ডেলিভারি ম্যান 📦', en: 'Delivery Rider 📦' },
+  { bn: 'ফুড ভ্লগার 🍲', en: 'Food Vlogger 🍲' },
+  { bn: 'ইউটিউবার 📹', en: 'Content Creator 📹' },
+  { bn: 'এসি মেকানিক ❄️', en: 'AC Technician ❄️' },
+  { bn: 'প্লাম্বার 🔧', en: 'Plumber 🔧' },
+  { bn: 'নিরাপত্তারক্ষী 🛡️', en: 'Security Guard 🛡️' },
+  { bn: 'ফ্যাশন ডিজাইনার 👗', en: 'Fashion Designer 👗' },
+  { bn: 'জাতীয় দলের ক্রিকেটার 🏏', en: 'National Cricketer 🏏' },
+  { bn: 'ফুটবলার ⚽', en: 'Footballer ⚽' },
+  { bn: 'পরিচ্ছন্নতাকর্মী 🧹', en: 'Sanitation Worker 🧹' },
+  { bn: 'সেলুন হেয়ার স্টাইলিস্ট ✂️', en: 'Hairstylist ✂️' },
+  { bn: 'চর্মকার (মুচি) 👞', en: 'Cobbler 👞' },
+  { bn: 'স্বর্ণকার 💍', en: 'Goldsmith 💍' },
+  { bn: 'মৃৎশিল্পী (কুমার) 🏺', en: 'Potter 🏺' },
+  { bn: 'কর্মকার (কামার) 🔨', en: 'Blacksmith 🔨' },
+  { bn: 'ট্রাফিক পুলিশ 🚦', en: 'Traffic Police 🚦' },
+  { bn: 'রেডিও জকি (আরজে) 📻', en: 'Radio Jockey 📻' },
+  { bn: 'ইভেন্ট প্ল্যানার 🎈', en: 'Event Planner 🎈' },
+  { bn: 'ট্যুর গাইড 🧳', en: 'Tour Guide 🧳' },
+  { bn: 'থ্রিডি অ্যানিমেটর 🎬', en: '3D Animator 🎬' },
+  { bn: 'ফার্মাসিস্ট 💊', en: 'Pharmacist 💊' },
+  { bn: 'লাইব্রেরিয়ান 📖', en: 'Librarian 📖' },
+  { bn: 'পশু চিকিৎসক 🐾', en: 'Veterinarian 🐾' },
+  { bn: 'কেবিন ক্রু / বিমানবালা 🛫', en: 'Flight Attendant 🛫' },
+  { bn: 'ডেটা সায়েন্টিস্ট 📈', en: 'Data Scientist 📈' },
+  { bn: 'সাইবার সিকিউরিটি স্পেশালিস্ট 🔐', en: 'Cybersecurity Expert 🔐' },
+  { bn: 'পরিবেশ আন্দোলনকর্মী 🌳', en: 'Environmentalist 🌳' },
+  { bn: 'প্রত্নতাত্ত্বিক 🏛️', en: 'Archaeologist 🏛️' },
+  { bn: 'ফিটনেস ট্রেনার 💪', en: 'Fitness Coach 💪' },
+  { bn: 'গ্রাফিক ডিজাইনার 🎨', en: 'Graphic Designer 🎨' },
+];
+
+/**
+ * Assigns distinctly randomized Bangladeshi professions to all players in a match.
+ * No duplicates within the same match.
+ */
+export function assignRandomBangladeshiDesignations(count: number): TitlePair[] {
+  const shuffled = [...BANGLADESHI_PROFESSIONS].sort(() => 0.5 - Math.random());
+  const selected: TitlePair[] = [];
+  for (let i = 0; i < count; i++) {
+    selected.push(shuffled[i % shuffled.length]);
+  }
+  return selected;
+}
+
 export const SCENE_PACKS: ScenePack[] = [
   {
-    id: 'cabinet',
-    nameBn: 'মন্ত্রী পরিষদ ও সচিবালয়',
-    nameEn: 'Cabinet Ministry & Secretariat',
-    icon: '🏛️',
-    firstPlayerTitle: { bn: 'প্রধানমন্ত্রী 🏛️', en: 'Prime Minister 🏛️' },
-    titles: [
-      { bn: 'স্বরাষ্ট্রমন্ত্রী 🛡️', en: 'Home Minister 🛡️' },
-      { bn: 'অর্থমন্ত্রী 💰', en: 'Finance Minister 💰' },
-      { bn: 'পররাষ্ট্রমন্ত্রী 🌐', en: 'Foreign Minister 🌐' },
-      { bn: 'স্বাস্থ্যমন্ত্রী 🏥', en: 'Health Minister 🏥' },
-      { bn: 'তথ্য ও সম্প্রচার মন্ত্রী 📢', en: 'Information Minister 📢' },
-      { bn: 'শিক্ষামন্ত্রী 🎓', en: 'Education Minister 🎓' },
-      { bn: 'বাণিজ্যমন্ত্রী 💼', en: 'Commerce Minister 💼' },
-      { bn: 'বিদ্যুৎ ও জ্বালানি প্রতিমন্ত্রী ⚡', en: 'Power State Minister ⚡' },
-      { bn: 'ক্যাবিনেট সচিব 📜', en: 'Cabinet Secretary 📜' },
-      { bn: 'প্রধান উপদেষ্টার বিশেষ সহকারী 🤝', en: 'Special Assistant 🤝' },
-      { bn: 'প্রেস সচিব 🎙️', en: 'Press Secretary 🎙️' },
-      { bn: 'আইন উপদেষ্টা ⚖️', en: 'Legal Advisor ⚖️' },
-    ],
+    id: 'bangladesh_professions',
+    nameBn: 'বাংলার পেশাজীবী সমাজ',
+    nameEn: 'Bangladeshi Professions Society',
+    icon: '🇧🇩',
+    firstPlayerTitle: { bn: 'প্রধান শিক্ষক 📚', en: 'Headmaster 📚' },
+    titles: BANGLADESHI_PROFESSIONS.slice(1),
   },
   {
     id: 'police',
@@ -52,7 +125,6 @@ export const SCENE_PACKS: ScenePack[] = [
       { bn: 'ওয়্যারলেস অপারেটর 📻', en: 'Wireless Operator 📻' },
       { bn: 'সিনিয়র হাবিলদার 🎖️', en: 'Senior Havildar 🎖️' },
       { bn: 'কনস্টেবল 🚨', en: 'Police Constable 🚨' },
-      { bn: 'কমান্ডো স্কোয়াড লিড 🪖', en: 'SWAT Squad Leader 🪖' },
     ],
   },
   {
@@ -72,50 +144,6 @@ export const SCENE_PACKS: ScenePack[] = [
       { bn: 'রেডিওলজিস্ট 🩻', en: 'Senior Radiologist 🩻' },
       { bn: 'ইন্টার্ন ডাক্তার 📋', en: 'Intern Doctor 📋' },
       { bn: 'ওয়ার্ড সুপারভাইজার 🛏️', en: 'Ward Supervisor 🛏️' },
-      { bn: 'অ্যাম্বুলেন্স চালক 🚨', en: 'Ambulance Driver 🚨' },
-      { bn: 'মেডিকেল অফিসার 🔬', en: 'Medical Officer 🔬' },
-    ],
-  },
-  {
-    id: 'court',
-    nameBn: 'আদালত ও বিচারকক্ষ',
-    nameEn: 'Courtroom & Judiciary',
-    icon: '⚖️',
-    firstPlayerTitle: { bn: 'প্রধান বিচারপতি ⚖️', en: 'Chief Justice ⚖️' },
-    titles: [
-      { bn: 'সিনিয়র জেলা জজ 👨‍⚖️', en: 'Senior District Judge 👨‍⚖️' },
-      { bn: 'সরকারি কৌঁসুলি / পিপি 📜', en: 'Public Prosecutor 📜' },
-      { bn: 'সিনিয়র আইনজীবী 💼', en: 'Senior Defense Counsel 💼' },
-      { bn: 'স্পেশাল ব্যারিস্টার 🎓', en: 'Distinguished Barrister 🎓' },
-      { bn: 'পেশকার সাহেব ✍️', en: 'Court Registrar / Peshkar ✍️' },
-      { bn: 'বিশেষ তদন্ত কর্মকর্তা 🔍', en: 'Special Court Investigator 🔍' },
-      { bn: 'ফরেনসিক বিশেষজ্ঞ সাক্ষী 🔬', en: 'Forensic Expert Witness 🔬' },
-      { bn: 'প্রত্যক্ষদর্শী সাক্ষী 👁️', en: 'Key Eyewitness 👁️' },
-      { bn: 'কোর্ট স্টেনোগ্রাফার ⌨️', en: 'Court Stenographer ⌨️' },
-      { bn: 'কোর্ট পুলিশ অফিসার 👮', en: 'Court Police Officer 👮' },
-      { bn: 'আদালতের পেয়াদা 🔔', en: 'Court Bailiff 🔔' },
-      { bn: 'জুরি প্রধান 👥', en: 'Jury Foreman 👥' },
-    ],
-  },
-  {
-    id: 'airport',
-    nameBn: 'এয়ারপোর্ট ও ফ্লাইট ক্রু',
-    nameEn: 'Airport & Flight Crew',
-    icon: '✈️',
-    firstPlayerTitle: { bn: 'চিফ ক্যাপ্টেন / পাইলট 👨‍✈️', en: 'Chief Captain / Pilot 👨‍✈️' },
-    titles: [
-      { bn: 'ফার্স্ট অফিসার 🛫', en: 'First Officer (Co-Pilot) 🛫' },
-      { bn: 'ফ্লাইট ইঞ্জিনিয়ার 🛠️', en: 'Flight Engineer 🛠️' },
-      { bn: 'চিফ পার্সার 🧑‍✈️', en: 'Chief Purser 🧑‍✈️' },
-      { bn: 'সিনিয়র কেবিন ক্রু 🍹', en: 'Senior Flight Attendant 🍹' },
-      { bn: 'এয়ার ট্রাফিক কন্ট্রোলার 📡', en: 'Air Traffic Controller 📡' },
-      { bn: 'এভিয়েশন সিকিউরিটি চিফ 🛂', en: 'Aviation Security Chief 🛂' },
-      { bn: 'প্রধান ইমিগ্রেশন অফিসার 🛂', en: 'Chief Immigration Officer 🛂' },
-      { bn: 'কাস্টমস ইন্সপেক্টর 🧳', en: 'Customs Inspector 🧳' },
-      { bn: 'গ্রাউন্ড অপারেশন ম্যানেজার 📋', en: 'Ground Operations Manager 📋' },
-      { bn: 'ব্যাগেজ সুপারভাইজার 🧳', en: 'Baggage Supervisor 🧳' },
-      { bn: 'ভিআইপি লাউঞ্জ ইনচার্জ ☕', en: 'VIP Lounge Host ☕' },
-      { bn: 'মার্শালিং সিগন্যালার 🦺', en: 'Marshalling Signal Officer 🦺' },
     ],
   },
   {
@@ -131,40 +159,31 @@ export const SCENE_PACKS: ScenePack[] = [
       { bn: 'বুলেটিন প্রযোজক 🎬', en: 'Executive News Producer 🎬' },
       { bn: 'সিনিয়র ফ্যাক্ট-চেকার 🔍', en: 'Senior Fact-Checker 🔍' },
       { bn: 'রাজনৈতিক বিশ্লেষক 🗣️', en: 'Political Analyst 🗣️' },
-      { bn: 'স্পেশাল করেসপন্ডেন্ট ✈️', en: 'Special Correspondent ✈️' },
-      { bn: 'আবহাওয়া পূর্বাভাসকারী 🌤️', en: 'Weather Anchor 🌤️' },
-      { bn: 'ব্রডকাস্ট ইঞ্জিনিয়ার 📡', en: 'Broadcast Engineer 📡' },
-      { bn: 'লাইভ ওবি ভ্যান ক্রু 🚐', en: 'Live OB Van Crew 🚐' },
-      { bn: 'হেড অফ গ্রাফিক্স 💻', en: 'Broadcast Graphics Head 💻' },
       { bn: 'স্পোর্টস এডিটর ⚽', en: 'Chief Sports Editor ⚽' },
     ],
   },
 ];
 
-// Helper to get a random scene or specific scene
 export function getScenePack(sceneId?: string): ScenePack {
   if (sceneId) {
     const found = SCENE_PACKS.find((s) => s.id === sceneId);
     if (found) return found;
   }
-  return SCENE_PACKS[Math.floor(Math.random() * SCENE_PACKS.length)];
+  return SCENE_PACKS[0]; // Defaults to bangladesh_professions
 }
 
-// Backward compatible export for FIRST_PLAYER_TITLE default
-export const FIRST_PLAYER_TITLE: TitlePair = SCENE_PACKS[0].firstPlayerTitle;
+export const FIRST_PLAYER_TITLE: TitlePair = BANGLADESHI_PROFESSIONS[0];
 
-/**
- * Generates player titles where ALL players in the game belong to the SAME cohesive scene/scenario.
- * Player 1 is always the Chief/Lead of that scene, and other players receive unique titles from the scene.
- */
 export function generatePlayerTitles(count: number, sceneId?: string): { titles: TitlePair[]; scene: ScenePack } {
+  if (!sceneId || sceneId === 'bangladesh_professions') {
+    const titles = assignRandomBangladeshiDesignations(count);
+    return { titles, scene: SCENE_PACKS[0] };
+  }
   const scene = getScenePack(sceneId);
   const titles: TitlePair[] = [scene.firstPlayerTitle];
-
   const shuffledSubTitles = [...scene.titles].sort(() => 0.5 - Math.random());
   for (let i = 1; i < count; i++) {
     titles.push(shuffledSubTitles[(i - 1) % shuffledSubTitles.length]);
   }
-
   return { titles, scene };
 }

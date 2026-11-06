@@ -19,6 +19,7 @@ import {
   MessageSquare,
   Send,
   Smile,
+  ShieldCheck,
 } from 'lucide-react';
 import { Language, Theme, CategoryId } from '../../types/game';
 import { OnlinePlayer, OnlineRoomData, RoomSettings, ChatMessage } from '../../types/multiplayer';
@@ -42,6 +43,7 @@ interface OnlineLobbyScreenProps {
   lang: Language;
   theme: Theme;
   onLeave: () => void;
+  onOpenAdmin?: () => void;
 }
 
 export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
@@ -50,6 +52,7 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
   currentPlayer,
   lang,
   onLeave,
+  onOpenAdmin,
 }) => {
   const isEn = lang === 'en';
   const isHost = currentPlayer.isHost;
@@ -257,6 +260,21 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
             >
               <Settings className="w-3.5 h-3.5 text-amber-500" />
               <span>{isEn ? 'Settings' : 'সেটিংস'}</span>
+            </button>
+          )}
+
+          {onOpenAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                sound.playClick();
+                onOpenAdmin();
+              }}
+              className="px-3 py-2 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              title={isEn ? 'Admin Dashboard' : 'অ্যাডমিন ড্যাশবোর্ড'}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
+              <span>{isEn ? 'Admin' : 'অ্যাডমিন'}</span>
             </button>
           )}
 

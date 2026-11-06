@@ -107,11 +107,29 @@ function getSecureRandomIndex(max: number): number {
   return Math.floor(Math.random() * max);
 }
 
+function getCustomWords(): WordItem[] {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem('dhappabaj_custom_words_v1');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    }
+  } catch {}
+  return [];
+}
+
+export function getFullWordPool(): WordItem[] {
+  return [...getCustomWords(), ...ALL_WORDS];
+}
+
 // Helper to pick a random word avoiding recently used words in the current match AND across matches
 export function pickRandomWord(usedWordIds: number[] = [], allowedCategories?: CategoryId[]): WordItem {
-  let categoryPool = ALL_WORDS;
+  const fullPool = getFullWordPool();
+  let categoryPool = fullPool;
   if (allowedCategories && allowedCategories.length > 0) {
-    categoryPool = ALL_WORDS.filter((w) => allowedCategories.includes(w.category));
+    categoryPool = fullPool.filter((w) => allowedCategories.includes(w.category));
   }
 
   const globalHistory = getGlobalHistory();

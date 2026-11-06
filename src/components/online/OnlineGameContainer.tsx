@@ -59,6 +59,7 @@ interface OnlineGameContainerProps {
   theme: Theme;
   onExit: () => void;
   onReopenOnlineModal?: () => void;
+  onOpenAdmin?: () => void;
 }
 
 export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
@@ -68,6 +69,7 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
   theme,
   onExit,
   onReopenOnlineModal,
+  onOpenAdmin,
 }) => {
   const isEn = lang === 'en';
   const [room, setRoom] = useState<OnlineRoomData>(initialRoom);
@@ -687,6 +689,7 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
                 lang={lang}
                 theme={theme}
                 onLeave={onExit}
+                onOpenAdmin={onOpenAdmin}
               />
             );
 
