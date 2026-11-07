@@ -6,12 +6,10 @@ import { ALL_WORDS } from '../data/words';
 import { OnlineRoomData, OnlinePlayer } from '../types/multiplayer';
 
 export const ADMIN_AUTHORIZED_EMAIL = 'smsheam1@gmail.com';
-export const ADMIN_MASTER_PASSCODE = 'dhappabaj2026';
 
 const CUSTOM_WORDS_STORAGE_KEY = 'dhappabaj_custom_words_v1';
 const QUICK_CHATS_STORAGE_KEY = 'dhappabaj_custom_quick_chats_v1';
 const SYSTEM_LOGS_STORAGE_KEY = 'dhappabaj_system_logs_v1';
-const ADMIN_AUTH_SESSION_KEY = 'dhappabaj_admin_session_auth';
 
 export interface SystemLogEntry {
   id: string;
@@ -55,37 +53,11 @@ export const DEFAULT_QUICK_CHATS: CustomQuickChats = {
   ],
 };
 
-// Check if current user or session is admin
+// Admin access is based on Firebase Authentication identity, never a client-side passcode.
 export function isUserAdmin(): boolean {
   if (typeof window === 'undefined') return false;
-  // 1. Check logged-in Firebase user email
   const currentEmail = auth.currentUser?.email?.toLowerCase();
-  if (currentEmail && currentEmail === ADMIN_AUTHORIZED_EMAIL.toLowerCase()) {
-    return true;
-  }
-  // 2. Check session passcode unlock
-  try {
-    const isUnlocked = sessionStorage.getItem(ADMIN_AUTH_SESSION_KEY) === 'true';
-    if (isUnlocked) return true;
-  } catch {}
-  return false;
-}
-
-export function unlockAdminWithPasscode(passcode: string): boolean {
-  const clean = passcode.trim();
-  if (clean === ADMIN_MASTER_PASSCODE || clean === 'sheam123') {
-    try {
-      sessionStorage.setItem(ADMIN_AUTH_SESSION_KEY, 'true');
-    } catch {}
-    return true;
-  }
-  return false;
-}
-
-export function lockAdminSession() {
-  try {
-    sessionStorage.removeItem(ADMIN_AUTH_SESSION_KEY);
-  } catch {}
+  return Boolean(currentEmail && currentEmail === ADMIN_AUTHORIZED_EMAIL.toLowerCase());
 }
 
 // Custom words management
