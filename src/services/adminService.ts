@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch, Timestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { cleanupRoomSubcollections } from './multiplayerService';
 import { WordItem, CategoryId } from '../types/game';
@@ -198,6 +198,7 @@ export async function closeRoomByAdmin(roomCode: string): Promise<void> {
     closedReason: 'closed_by_admin',
     updatedAt: now,
     lastActivityAt: now,
+    expiresAt: Timestamp.fromMillis(now + 24 * 60 * 60 * 1000),
   });
   logSystemEvent('info', `Admin closed room ${roomCode}`);
 }
