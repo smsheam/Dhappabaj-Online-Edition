@@ -573,8 +573,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 {isEn
-                  ? `Sign in with primary owner (${ADMIN_AUTHORIZED_EMAIL}) or enter pass.`
-                  : `মাস্টার ওনার (${ADMIN_AUTHORIZED_EMAIL}) দিয়ে লগইন অথবা পাসকোড প্রবেশ করান।`}
+                  ? `Sign in with the primary owner Google account (${ADMIN_AUTHORIZED_EMAIL}).`
+                  : `মাস্টার ওনার (${ADMIN_AUTHORIZED_EMAIL}) Google অ্যাকাউন্ট দিয়ে সাইন ইন করুন।`}
               </p>
             </div>
 
