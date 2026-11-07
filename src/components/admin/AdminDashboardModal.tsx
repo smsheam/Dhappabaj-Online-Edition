@@ -42,10 +42,6 @@ import {
   getLocalCustomWords,
   addOrUpdateWord,
   deleteWord,
-  getCustomQuickChats,
-  saveCustomQuickChats,
-  CustomQuickChats,
-  DEFAULT_QUICK_CHATS,
   fetchLiveRooms,
   closeRoomByAdmin,
   deleteRoomByAdmin,
@@ -141,11 +137,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [editingWordId, setEditingWordId] = useState<number | null>(null);
   const [previewWord, setPreviewWord] = useState<WordItem | null>(null);
 
-  // Quick chats & content state
-  const [quickChats, setQuickChats] = useState<CustomQuickChats>(() => getCustomQuickChats());
-  const [chatCategory, setChatCategory] = useState<'suspect' | 'defense' | 'fun'>('suspect');
-  const [newChatBn, setNewChatBn] = useState<string>('');
-  const [newChatEn, setNewChatEn] = useState<string>('');
   const [gameAnnouncement, setGameAnnouncement] = useState<string>('স্বাগতম ধাপ্পাবাজে! চতুর আলোচনা করুন এবং ধাপ্পাবাজকে চিহ্নিত করুন।');
 
   // Scoring management state
@@ -449,31 +440,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       }
     };
     reader.readAsText(file);
-  };
-
-  // Quick Chat save
-  const handleAddChat = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newChatBn.trim()) return;
-
-    sound.playClick();
-    const updated = { ...quickChats };
-    updated[chatCategory].unshift({
-      bn: newChatBn.trim(),
-      en: newChatEn.trim() || newChatBn.trim(),
-    });
-    setQuickChats(updated);
-    saveCustomQuickChats(updated);
-    setNewChatBn('');
-    setNewChatEn('');
-  };
-
-  const handleDeleteChat = (category: 'suspect' | 'defense' | 'fun', index: number) => {
-    sound.playClick();
-    const updated = { ...quickChats };
-    updated[category].splice(index, 1);
-    setQuickChats(updated);
-    saveCustomQuickChats(updated);
   };
 
   // Scoring save
