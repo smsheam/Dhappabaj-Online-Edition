@@ -625,6 +625,12 @@ export async function leaveOnlineRoom(roomCode: string) {
           expiresAt: Timestamp.fromMillis(now + 24 * 60 * 60 * 1000),
         });
         await cleanupRoomSubcollections(roomCode);
+      } else {
+        await updateDoc(roomRef, {
+          playerCount: activePlayers.length,
+          lastActivityAt: now,
+          updatedAt: now,
+        });
       }
     }
   } catch (error) {
