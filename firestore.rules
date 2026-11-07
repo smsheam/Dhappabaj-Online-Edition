@@ -132,16 +132,22 @@ service cloud.firestore {
           isRoomMember(roomId) && (
             (
               resource.data.currentPhase == 'CLUE' &&
-              (
-                resource.data.clueTurnPlayerId == request.auth.uid ||
-                (
-                  resource.data.clueTurnPlayerId == null &&
-                  resource.data.clueTurnIndex >= resource.data.clueOrder.size()
-                )
-              ) &&
               request.resource.data.diff(resource.data).affectedKeys()
                 .hasOnly(['clueTurnIndex', 'clueTurnPlayerId', 'phaseEndsAt',
-                  'currentPhase', 'lastActivityAt', 'updatedAt'])
+                  'currentPhase', 'lastActivityAt', 'updatedAt']) &&
+              (
+                (
+                  resource.data.clueTurnPlayerId == request.auth.uid &&
+                  request.resource.data.clueTurnIndex == resource.data.clueTurnIndex + 1 &&
+                  request.resource.data.currentPhase == 'CLUE'
+                ) ||
+                (
+                  resource.data.clueTurnPlayerId == null &&
+                  resource.data.clueTurnIndex >= resource.data.clueOrder.size() &&
+                  request.resource.data.clueTurnIndex == resource.data.clueTurnIndex &&
+                  request.resource.data.currentPhase == 'DISCUSSION'
+                )
+              )
             ) ||
 
             (
@@ -156,6 +162,8 @@ service cloud.firestore {
               request.resource.data.diff(resource.data).affectedKeys()
                 .hasOnly(['nextRoundConfirmed', 'lastActivityAt', 'updatedAt']) &&
               request.resource.data.nextRoundConfirmed is list &&
+              request.resource.data.nextRoundConfirmed.hasAll(resource.data.nextRoundConfirmed) &&
+              request.resource.data.nextRoundConfirmed.size() == resource.data.nextRoundConfirmed.size() + 1 &&
               request.resource.data.nextRoundConfirmed.hasAny([request.auth.uid])
             ) ||
 
@@ -164,6 +172,7 @@ service cloud.firestore {
                 .hasOnly(['status', 'closedReason', 'playerCount', 'updatedAt', 'expiresAt']) &&
               request.resource.data.status == 'CLOSED' &&
               request.resource.data.closedReason == 'empty_room' &&
+              resource.data.playerCount <= 1 &&
               request.resource.data.playerCount == 0
             )
           )
