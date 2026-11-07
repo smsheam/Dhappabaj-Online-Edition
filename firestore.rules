@@ -65,9 +65,22 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       allow list: if isAdmin();
-      allow create, update: if isSignedIn() &&
-        (request.auth.uid == userId || isAdmin()) &&
-        request.resource.data.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId &&
+        request.resource.data.uid == userId &&
+        !('isBanned' in request.resource.data) &&
+        !('bannedReason' in request.resource.data);
+      allow update: if isAdmin() ||
+        (
+          isSignedIn() &&
+          request.auth.uid == userId &&
+          request.resource.data.uid == userId &&
+          request.resource.data.createdAt == resource.data.createdAt &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'email', 'displayName', 'username', 'photoURL', 'bio', 'accountType',
+            'updatedAt', 'hasCompletedOnboarding', 'customization', 'stats',
+            'unlockedBadges'
+          ])
+        );
       allow delete: if isAdmin();
     }
 
