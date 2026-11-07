@@ -200,10 +200,8 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
       if (myPlayer) {
         await sendPlayerHeartbeat(initialRoom.roomCode, isHost, myPlayer.name, myPlayer.avatar, playersStateRef.current.length);
       }
-      // Check inactivity & host disconnect expiration (host only to prevent redundant writes)
-      if (isHost) {
-        await checkAndExpireRoomIfNeeded(initialRoom.roomCode, roomStateRef.current);
-      }
+      // Any connected room member can trigger expiry after the configured inactivity window.
+      await checkAndExpireRoomIfNeeded(initialRoom.roomCode, roomStateRef.current);
     }, 120000);
 
     // Window beforeunload listener for intentional tab close
