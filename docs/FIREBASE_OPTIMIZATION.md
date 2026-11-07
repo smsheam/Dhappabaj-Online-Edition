@@ -4,7 +4,7 @@ This branch reduces Firestore traffic and tightens client access. It does not ch
 
 ## Changes in this branch
 
-- Removed the online lobby chat UI and chat read/write service.
+- Removed the online lobby and discussion chat interfaces, quick reactions, admin quick-chat controls and Firestore chat write/read service.
 - Removed chat-message cleanup from each round start. Legacy messages are deleted only when a room closes or expires.
 - Increased the Firestore player heartbeat interval from 35 seconds to 120 seconds.
 - Removed unnecessary parent-room writes for player profile, ready, vote and card-seen actions.
