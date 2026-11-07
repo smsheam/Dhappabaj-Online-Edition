@@ -34,6 +34,16 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/rooms/$(roomId)/players/$(request.auth.uid));
     }
 
+    function isRoomClosed(roomId) {
+      return exists(/databases/$(database)/documents/rooms/$(roomId)) &&
+        get(/databases/$(database)/documents/rooms/$(roomId)).data.status in ['CLOSED', 'EXPIRED'];
+    }
+
+    function isRoomMemberAfter(roomId) {
+      return isSignedIn() &&
+        existsAfter(/databases/$(database)/documents/rooms/$(roomId)/players/$(request.auth.uid));
+    }
+
     function isAssignedImposter(roomId) {
       return isSignedIn() &&
         exists(/databases/$(database)/documents/rooms/$(roomId)/private/$(request.auth.uid)) &&
@@ -93,7 +103,7 @@ service cloud.firestore {
       allow update: if isSignedIn() && isValidId(roomId) && roomIdentityIsUnchanged() && (
         isRoomHost(roomId) || isAdmin() ||
         (
-          isRoomMember(roomId) && (
+          (isRoomMember(roomId) || isRoomMemberAfter(roomId)) && (
             request.resource.data.diff(resource.data).affectedKeys()
               .hasOnly(['playerCount', 'lastActivityAt', 'updatedAt']) ||
 
@@ -156,7 +166,12 @@ service cloud.firestore {
           request.resource.data.id == playerId;
 
         allow update: if isSignedIn() && isValidId(roomId) && isValidId(playerId) && (
-          isRoomHost(roomId) || isAdmin() ||
+          isRoomHost(roomId) || isAdmin() || isRoomClosed(roomId) ||
+          (
+            resource.data.currentPhase == 'IMPOSTER_GUESS' &&
+            isAssignedImposter(roomId) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['score'])
+          ) ||
           (
             request.auth.uid == playerId &&
             request.resource.data.diff(resource.data).affectedKeys()
@@ -175,7 +190,7 @@ service cloud.firestore {
           request.auth.uid == playerId;
         allow list: if false;
         allow create, update: if isRoomHost(roomId) || isAdmin();
-        allow delete: if isRoomHost(roomId) || isAdmin();
+        allow delete: if isRoomHost(roomId) || isAdmin() || isRoomClosed(roomId);
       }
 
       match /votes/{playerId} {
@@ -187,7 +202,13 @@ service cloud.firestore {
           isValidId(playerId) && request.auth.uid == playerId &&
           isRoomMember(roomId) &&
           request.resource.data.voterId == request.auth.uid;
-        allow delete: if isRoomHost(roomId) || isAdmin();
+        allow delete: if isRoomHost(roomId) || isAdmin() || isRoomClosed(roomId);
+      }
+
+      // Legacy lobby chat documents can only be read and deleted during cleanup.
+      match /messages/{messageId} {
+        allow get, list: if isRoomHost(roomId) || isAdmin() || isRoomClosed(roomId);
+        allow delete: if isRoomHost(roomId) || isAdmin() || isRoomClosed(roomId);
       }
 
       // Lobby chat was removed. Legacy messages are inaccessible and are purged during room cleanup.
