@@ -481,11 +481,6 @@ export async function joinOnlineRoom(
     const playerRef = doc(db, 'rooms', roomCode, 'players', activeUser.uid);
     const batch = writeBatch(db);
     batch.set(playerRef, sanitizeForFirestore(newPlayer));
-    batch.update(roomRef, {
-      playerCount: existingPlayers.length + 1,
-      lastActivityAt: now,
-      updatedAt: now,
-    });
     await withTimeout(batch.commit(), 10000);
 
     sessionStorage.setItem('dhappabaj_active_room', roomCode);
@@ -515,11 +510,6 @@ export async function joinOnlineRoom(
         const retryBatch = writeBatch(db);
         const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
         retryBatch.set(playerRef, sanitizeForFirestore(newPlayer));
-        retryBatch.update(roomRef, {
-          playerCount: existingPlayers.length + 1,
-          lastActivityAt: now,
-          updatedAt: now,
-        });
         await withTimeout(retryBatch.commit(), 10000);
 
         sessionStorage.setItem('dhappabaj_active_room', roomCode);
@@ -686,7 +676,8 @@ export async function sendPlayerHeartbeat(
   roomCode: string,
   isHost: boolean,
   name?: string,
-  avatar?: string
+  avatar?: string,
+  playerCount?: number
 ) {
   const user = auth.currentUser;
   if (!user) return;
@@ -709,6 +700,7 @@ export async function sendPlayerHeartbeat(
       await updateDoc(roomRef, {
         lastActivityAt: now,
         hostDisconnectedAt: null,
+        ...(typeof playerCount === 'number' ? { playerCount } : {}),
       });
     }
   } catch (error) {
@@ -856,6 +848,9 @@ export async function startOnlineRound(roomCode: string, roundNumber: number = 1
   if (!roomSnap.exists()) return;
 
   const roomData = roomSnap.data() as OnlineRoomData;
+  if (roomData.hostId !== auth.currentUser?.uid) {
+    throw new Error('শুধুমাত্র হোস্ট খেলাটি শুরু করতে পারবেন (Only the host can start the game)');
+  }
   const playersSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'players'));
   const players = playersSnap.docs.map((d) => d.data() as OnlinePlayer);
 
@@ -1006,6 +1001,10 @@ export async function setOnlineRoomPhase(
   preloadedClueOrder?: string[]
 ) {
   const roomRef = doc(db, 'rooms', roomCode);
+  const user = auth.currentUser;
+  if (!user) return;
+  const currentRoom = await safeGetDoc(roomRef);
+  if (!currentRoom.exists() || (currentRoom.data() as OnlineRoomData).hostId !== user.uid) return;
   const now = Date.now();
 
   try {
@@ -1081,6 +1080,7 @@ export async function submitOnlineClue(roomCode: string, clueText: string) {
     const roomSnap = await safeGetDoc(roomRef);
     if (!roomSnap.exists()) return;
     const roomData = roomSnap.data() as OnlineRoomData;
+    if (roomData.currentPhase !== 'CLUE' || roomData.clueTurnPlayerId !== user.uid) return;
 
     // Save current player's clue
     await updateDoc(playerRef, {
@@ -1145,6 +1145,7 @@ export async function advanceOnlineClueTurn(roomCode: string, timedOutPlayerId?:
     if (!roomSnap.exists()) return;
     const roomData = roomSnap.data() as OnlineRoomData;
 
+    if (roomData.hostId !== auth.currentUser?.uid) return;
     if (roomData.currentPhase !== 'CLUE') return;
     if (timedOutPlayerId && roomData.clueTurnPlayerId !== timedOutPlayerId) {
       // Another client already advanced the turn
@@ -1248,6 +1249,7 @@ export async function resolveOnlineVotingResults(roomCode: string) {
   if (!roomSnap.exists()) return;
 
   const roomData = roomSnap.data() as OnlineRoomData;
+  if (roomData.hostId !== auth.currentUser?.uid) return;
   // Guard against concurrent executions from multiple clients
   if (roomData.currentPhase !== 'VOTING') return;
 
@@ -1362,6 +1364,7 @@ export async function submitOnlineImposterGuess(
 
   const roomData = roomSnap.data() as OnlineRoomData;
   if (roomData.currentPhase !== 'IMPOSTER_GUESS') return;
+  if (!(roomData.revealedImposterIds || []).includes(auth.currentUser?.uid || '')) return;
 
   const secretWord = roomData.revealedWord;
   if (!secretWord) return;
