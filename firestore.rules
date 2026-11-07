@@ -34,6 +34,11 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/rooms/$(roomId)/players/$(request.auth.uid));
     }
 
+    function isRoomMemberAfter(roomId) {
+      return isSignedIn() &&
+        existsAfter(/databases/$(database)/documents/rooms/$(roomId)/players/$(request.auth.uid));
+    }
+
     function isRoomClosed(roomId) {
       return exists(/databases/$(database)/documents/rooms/$(roomId)) &&
         get(/databases/$(database)/documents/rooms/$(roomId)).data.status in ['CLOSED', 'EXPIRED'];
@@ -129,7 +134,9 @@ service cloud.firestore {
           request.resource.data.status in ['CLOSED', 'EXPIRED']
         ) ||
         (
-          isRoomMember(roomId) && (
+          (isRoomMember(roomId) || isRoomMemberAfter(roomId)) && (
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['playerCount', 'lastActivityAt', 'updatedAt']) ||
             (
               resource.data.currentPhase == 'CLUE' &&
               request.resource.data.diff(resource.data).affectedKeys()
