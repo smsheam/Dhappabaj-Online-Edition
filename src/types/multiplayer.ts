@@ -115,16 +115,3 @@ export interface OnlineVote {
   suspectIds?: string[]; // Multiple votes supported when 2 imposters
   timestamp: number;
 }
-
-export interface ChatMessage {
-  id: string;
-  senderId: string;
-  senderName: string;
-  senderAvatar: string;
-  senderColor?: string;
-  text: string;
-  timestamp: number;
-  isVoice?: boolean;
-  audioData?: string;
-  durationMs?: number;
-}
