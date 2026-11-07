@@ -483,6 +483,11 @@ export async function joinOnlineRoom(
     const playerRef = doc(db, 'rooms', roomCode, 'players', activeUser.uid);
     const batch = writeBatch(db);
     batch.set(playerRef, sanitizeForFirestore(newPlayer));
+    batch.update(roomRef, {
+      playerCount: existingPlayers.length + 1,
+      lastActivityAt: now,
+      updatedAt: now,
+    });
     await withTimeout(batch.commit(), 10000);
 
     sessionStorage.setItem('dhappabaj_active_room', roomCode);
@@ -512,6 +517,11 @@ export async function joinOnlineRoom(
         const retryBatch = writeBatch(db);
         const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
         retryBatch.set(playerRef, sanitizeForFirestore(newPlayer));
+        retryBatch.update(roomRef, {
+          playerCount: existingPlayers.length + 1,
+          lastActivityAt: now,
+          updatedAt: now,
+        });
         await withTimeout(retryBatch.commit(), 10000);
 
         sessionStorage.setItem('dhappabaj_active_room', roomCode);
