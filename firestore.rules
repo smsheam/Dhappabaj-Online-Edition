@@ -100,7 +100,7 @@ service cloud.firestore {
         (
           isSignedIn() &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['status', 'closedReason', 'updatedAt']) &&
+            .hasOnly(['status', 'closedReason', 'updatedAt', 'expiresAt']) &&
           (
             (
               resource.data.status == 'PLAYING' &&
@@ -148,7 +148,7 @@ service cloud.firestore {
 
             (
               request.resource.data.diff(resource.data).affectedKeys()
-                .hasOnly(['status', 'closedReason', 'playerCount', 'updatedAt']) &&
+                .hasOnly(['status', 'closedReason', 'playerCount', 'updatedAt', 'expiresAt']) &&
               request.resource.data.status == 'CLOSED' &&
               request.resource.data.closedReason == 'empty_room' &&
               request.resource.data.playerCount == 0
