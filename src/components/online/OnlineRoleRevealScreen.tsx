@@ -17,6 +17,8 @@ import { OnlinePlayer, OnlineRoomData, PrivatePlayerRole } from '../../types/mul
 import { CATEGORIES } from '../../data/categories';
 import { sound } from '../../utils/audio';
 import { setOnlineRoomPhase, confirmOnlineCardSeen } from '../../services/multiplayerService';
+import { getAiWordDescription, AiWordDescription } from '../../services/aiDescriptionService';
+import { WordItem } from '../../types/game';
 
 interface OnlineRoleRevealScreenProps {
   room: OnlineRoomData;
@@ -38,10 +40,27 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
   const [isRevealed, setIsRevealed] = useState<boolean>(false);
   const [hasAcknowledged, setHasAcknowledged] = useState<boolean>(currentPlayer.hasSeenCard || false);
   const [isProceeding, setIsProceeding] = useState<boolean>(false);
+  const [aiDesc, setAiDesc] = useState<AiWordDescription | null>(null);
   const advanceTriggeredRef = useRef<boolean>(false);
 
   const isImposter = privateRole?.role === 'imposter';
   const categoryInfo = privateRole ? CATEGORIES[privateRole.category] : null;
+
+  // Fetch AI description for innocent player only
+  useEffect(() => {
+    if (!privateRole || privateRole.role === 'imposter' || !privateRole.wordBn) return;
+    const dummyWord: WordItem = {
+      id: room.usedWordIds?.[room.usedWordIds.length - 1] || 1,
+      wordBn: privateRole.wordBn,
+      wordEn: privateRole.wordEn || '',
+      category: privateRole.category,
+      hintBn: '',
+      hintEn: '',
+    };
+    getAiWordDescription(dummyWord).then((desc) => {
+      setAiDesc(desc);
+    });
+  }, [privateRole, room.usedWordIds]);
 
   // Synchronized countdown timer for the 45s role reveal phase
   const [timeLeft, setTimeLeft] = useState<number>(() => {
@@ -82,7 +101,7 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
   const confirmedPlayersCount = players.filter((p) => p.hasSeenCard).length;
   const allConfirmed = confirmedPlayersCount === players.length && players.length > 0;
 
-  // 1. Countdown timer for the 45s phase duration
+  // 1. Countdown timer for the 45s phase duration: HOST ONLY advances on timeout
   useEffect(() => {
     if (!room.phaseEndsAt || room.currentPhase !== 'ROLE_REVEAL') return;
 
@@ -90,16 +109,18 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
       const remaining = Math.max(0, Math.ceil((room.phaseEndsAt! - Date.now()) / 1000));
       setTimeLeft(remaining);
 
-      // Auto-advance if time runs out
+      // Auto-advance if time runs out: Strictly Host client triggers to avoid clock-drift phase skipping
       if (remaining === 0 && !advanceTriggeredRef.current && room.currentPhase === 'ROLE_REVEAL') {
-        advanceTriggeredRef.current = true;
-        clearInterval(interval);
-        proceedToClues();
+        if (currentPlayer.isHost) {
+          advanceTriggeredRef.current = true;
+          clearInterval(interval);
+          proceedToClues();
+        }
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [room.phaseEndsAt, room.currentPhase]);
+  }, [room.phaseEndsAt, room.currentPhase, currentPlayer.isHost]);
 
   // 2. Requirement 3 & 4: Automatically advance to Clue stage when all players confirm their card!
   useEffect(() => {
@@ -251,6 +272,19 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
                     {privateRole?.wordEn}
                   </div>
                 </div>
+
+                {/* AI-Driven Word Insight for Innocent Players */}
+                {aiDesc && (
+                  <div className="p-2.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-left space-y-1">
+                    <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-amber-400">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <span>{isEn ? 'AI Word Insight (Citizens Only):' : 'এআই শব্দ পরিচিতি (শুধুমাত্র নির্দোষদের জন্য):'}</span>
+                    </div>
+                    <p className="text-xs text-amber-100 font-medium leading-relaxed">
+                      {isEn ? aiDesc.en : aiDesc.bn}
+                    </p>
+                  </div>
+                )}
 
                 <div className="p-3 rounded-2xl bg-black/60 border border-emerald-500/40 text-emerald-200 text-xs font-medium">
                   {isEn

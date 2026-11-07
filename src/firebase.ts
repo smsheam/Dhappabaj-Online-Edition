@@ -7,7 +7,7 @@ import {
   onAuthStateChanged,
   User,
   setPersistence,
-  browserSessionPersistence,
+  browserLocalPersistence,
   signOut,
 } from 'firebase/auth';
 import {
@@ -53,14 +53,17 @@ export const db = firestoreInstance;
 // Initialize Firebase Auth
 export const auth = getAuth(app);
 
-// Use session persistence so tabs and browser refreshes remain isolated and clean
+// Use local persistence so users stay logged in across visits
 try {
-  setPersistence(auth, browserSessionPersistence).catch(() => {});
+  setPersistence(auth, browserLocalPersistence).catch(() => {});
 } catch {
   // Ignored if unsupported in certain environments
 }
 
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({
+  prompt: 'select_account',
+});
 
 export enum OperationType {
   CREATE = 'create',
@@ -176,6 +179,7 @@ export async function signOutUser(): Promise<void> {
     sessionStorage.removeItem('dhappabaj_name');
     sessionStorage.removeItem('dhappabaj_avatar');
     sessionStorage.removeItem('dhappabaj_active_room');
+    localStorage.removeItem('dhappabaj_user_profile');
     if (auth.currentUser) {
       await signOut(auth);
     }
@@ -207,8 +211,7 @@ export async function ensureFirestoreConnected(): Promise<void> {
   }
 }
 
-// Proactively initiate connection and authenticate without blocking
+// Proactively initiate network connection
 ensureFirestoreConnected();
-ensureAuthenticatedUser().catch(() => {});
 
 

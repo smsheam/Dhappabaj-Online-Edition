@@ -64,15 +64,17 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
         sound.playTimerTick();
       }
 
-      // If time expires for current turn: automatically advance!
+      // If time expires for current turn: strictly the active player or host advances
       if (remaining === 0 && !hasTimedOut) {
-        setHasTimedOut(true);
-        advanceOnlineClueTurn(room.roomCode, currentTurnPlayerId || undefined);
+        if (isMyTurn || currentPlayer.isHost) {
+          setHasTimedOut(true);
+          advanceOnlineClueTurn(room.roomCode, currentTurnPlayerId || undefined);
+        }
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [room.phaseEndsAt, currentTurnPlayerId, hasTimedOut, room.roomCode]);
+  }, [room.phaseEndsAt, currentTurnPlayerId, hasTimedOut, room.roomCode, isMyTurn, currentPlayer.isHost]);
 
   // Reset timeout guard when active turn changes
   useEffect(() => {
@@ -192,7 +194,6 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
             <form onSubmit={handleSubmit} className="flex gap-2">
               <input
                 type="text"
-                autoFocus
                 value={clueInput}
                 onChange={(e) => setClueInput(e.target.value)}
                 maxLength={45}
@@ -201,8 +202,14 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
               />
               <button
                 type="submit"
+                onPointerDown={(e) => {
+                  // Ensure immediate trigger on mobile without requiring blur tap
+                  if (clueInput.trim() && !submitting && isMyTurn) {
+                    handleSubmit(e);
+                  }
+                }}
                 disabled={submitting || !clueInput.trim()}
-                className="px-6 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
+                className="px-6 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all active:scale-95"
               >
                 <Send className="w-4 h-4" />
                 <span>{isEn ? 'Submit' : 'জমা দিন'}</span>

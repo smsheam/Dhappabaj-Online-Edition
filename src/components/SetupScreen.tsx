@@ -481,9 +481,28 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
 
         {/* Section 3: Word Categories */}
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-          <label className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2.5 block">
-            {isEn ? 'Categories' : 'শব্দ ক্যাটাগরি'}
-          </label>
+          <div className="flex items-center justify-between mb-2.5">
+            <label className="text-sm font-bold text-slate-800 dark:text-slate-200">
+              {isEn ? 'Word Categories' : 'শব্দ ক্যাটাগরি'}
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                sound.playClick();
+                const all = Object.keys(CATEGORIES) as CategoryId[];
+                if (selectedCategories.length === all.length) {
+                  setSelectedCategories([all[0]]);
+                } else {
+                  setSelectedCategories(all);
+                }
+              }}
+              className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+            >
+              {selectedCategories.length === Object.keys(CATEGORIES).length
+                ? (isEn ? 'Deselect All' : 'সব বাতিল')
+                : (isEn ? 'Select All' : 'সব নির্বাচন')}
+            </button>
+          </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {(Object.keys(CATEGORIES) as CategoryId[]).map((catId) => {

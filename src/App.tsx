@@ -23,16 +23,21 @@ import { AdminDashboardModal } from './components/admin/AdminDashboardModal';
 import { ProfileModal } from './components/profile/ProfileModal';
 import { AchievementsModal } from './components/achievements/AchievementsModal';
 import { SettingsModal } from './components/SettingsModal';
+import { AuthPromptModal } from './components/auth/AuthPromptModal';
+import { OnboardingModal } from './components/profile/OnboardingModal';
 import { UserProfile } from './types/user';
 import {
   getUserProfile,
-  loginAsGuest,
   subscribeToUserProfile,
   updateProfileCustomization,
+  signOutUser,
+  createDefaultProfile,
+  saveUserProfile,
 } from './services/userService';
 import { isOwnerEmail, getUserRole } from './services/roleService';
 import { isUserAdmin } from './services/adminService';
 import { auth } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { Analytics } from '@vercel/analytics/react';
 
 const AVATAR_COLORS = [
@@ -97,31 +102,60 @@ export default function App() {
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
   const [isAchievementsOpen, setIsAchievementsOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(sound.getMuted());
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [canAccessAdmin, setCanAccessAdmin] = useState<boolean>(false);
 
-  // Initialize player profile & check admin permissions
+  // Initialize player profile & check admin permissions with Firebase Auth
   useEffect(() => {
     let unsubProfile: (() => void) | null = null;
-    const initUser = async () => {
+
+    const checkAdmin = async (prof: UserProfile | null) => {
+      const email = auth.currentUser?.email || prof?.email;
+      if (isOwnerEmail(email) || isUserAdmin()) {
+        setCanAccessAdmin(true);
+        return;
+      }
+      const roleInfo = await getUserRole(auth.currentUser?.uid, email || undefined);
+      setCanAccessAdmin(roleInfo.role === 'owner' || roleInfo.role === 'editor');
+    };
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      if (unsubProfile) {
+        unsubProfile();
+        unsubProfile = null;
+      }
+
+      if (!user) {
+        setUserProfile(null);
+        setCanAccessAdmin(false);
+        setIsAuthModalOpen(true);
+        return;
+      }
+
       try {
-        let profile = await loginAsGuest();
+        let profile = await getUserProfile(user.uid);
+        if (!profile) {
+          profile = createDefaultProfile(
+            user.uid,
+            user.isAnonymous,
+            user.email,
+            user.displayName,
+            user.photoURL
+          );
+          await saveUserProfile(profile);
+        }
+
         setUserProfile(profile);
-
-        const checkAdmin = async (prof: UserProfile | null) => {
-          const email = auth.currentUser?.email || prof?.email;
-          if (isOwnerEmail(email) || isUserAdmin()) {
-            setCanAccessAdmin(true);
-            return;
-          }
-          const roleInfo = await getUserRole(auth.currentUser?.uid, email || undefined);
-          setCanAccessAdmin(roleInfo.role === 'owner' || roleInfo.role === 'editor');
-        };
-
         checkAdmin(profile);
 
-        unsubProfile = subscribeToUserProfile(profile.uid, (updated) => {
+        if (!profile.hasCompletedOnboarding) {
+          setIsOnboardingOpen(true);
+        }
+
+        unsubProfile = subscribeToUserProfile(user.uid, (updated) => {
           if (updated) {
             setUserProfile(updated);
             checkAdmin(updated);
@@ -130,13 +164,22 @@ export default function App() {
       } catch (err) {
         console.warn('User profile initialization warning:', err);
       }
-    };
+    });
 
-    initUser();
     return () => {
+      unsubscribeAuth();
       if (unsubProfile) unsubProfile();
     };
   }, []);
+
+  const handleSignOut = async () => {
+    sound.playClick();
+    setIsProfileOpen(false);
+    await signOutUser();
+    setUserProfile(null);
+    setCanAccessAdmin(false);
+    setIsAuthModalOpen(true);
+  };
 
   // Apply theme to document
   useEffect(() => {
@@ -360,9 +403,40 @@ export default function App() {
         onClose={() => setIsProfileOpen(false)}
         userProfile={userProfile}
         onProfileUpdated={(updated) => setUserProfile(updated)}
+        onSignOut={handleSignOut}
         lang={lang}
         theme={theme}
       />
+
+      {/* Auth Prompt Modal */}
+      <AuthPromptModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        canDismiss={!!userProfile}
+        onAuthenticated={(prof) => {
+          setUserProfile(prof);
+          setIsAuthModalOpen(false);
+          if (!prof.hasCompletedOnboarding) {
+            setIsOnboardingOpen(true);
+          }
+        }}
+        lang={lang}
+        theme={theme}
+      />
+
+      {/* First-time Onboarding Modal */}
+      {userProfile && (
+        <OnboardingModal
+          isOpen={isOnboardingOpen}
+          userProfile={userProfile}
+          onComplete={(updated) => {
+            setUserProfile(updated);
+            setIsOnboardingOpen(false);
+          }}
+          lang={lang}
+          theme={theme}
+        />
+      )}
 
       {/* Achievements & Missions Modal */}
       <AchievementsModal
@@ -424,6 +498,8 @@ export default function App() {
               onOpenProfile={() => setIsProfileOpen(true)}
               onOpenSettings={() => setIsSettingsOpen(true)}
               onOpenAdmin={() => setIsAdminOpen(true)}
+              onOpenSignIn={() => setIsAuthModalOpen(true)}
+              onSignOut={handleSignOut}
               canAccessAdmin={canAccessAdmin}
               userProfile={userProfile}
               lang={lang}

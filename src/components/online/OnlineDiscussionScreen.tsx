@@ -90,16 +90,18 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
         sound.playTimerTick();
       }
 
-      // If timer hits 0: automatically transition to voting
+      // If timer hits 0: strictly the HOST automatically transitions to voting to prevent client clock skew
       if (remaining === 0 && !autoAdvancing) {
-        setAutoAdvancing(true);
-        clearInterval(interval);
-        handleStartVoting();
+        if (isHost) {
+          setAutoAdvancing(true);
+          clearInterval(interval);
+          handleStartVoting();
+        }
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [room.phaseEndsAt, autoAdvancing]);
+  }, [room.phaseEndsAt, autoAdvancing, isHost]);
 
   const handleStartVoting = async () => {
     sound.playClick();

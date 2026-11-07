@@ -107,6 +107,70 @@ function getSecureRandomIndex(max: number): number {
   return Math.floor(Math.random() * max);
 }
 
+const WORD_OVERRIDES_KEY = 'dhappabaj_word_overrides_v1';
+const DELETED_WORDS_KEY = 'dhappabaj_deleted_words_v1';
+
+export function getWordOverrides(): Record<number, Partial<WordItem>> {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem(WORD_OVERRIDES_KEY);
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    }
+  } catch {}
+  return {};
+}
+
+export function saveWordOverride(id: number, override: Partial<WordItem>) {
+  try {
+    const current = getWordOverrides();
+    current[id] = { ...(current[id] || {}), ...override };
+    localStorage.setItem(WORD_OVERRIDES_KEY, JSON.stringify(current));
+  } catch {}
+}
+
+export function getDeletedWordIds(): number[] {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem(DELETED_WORDS_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    }
+  } catch {}
+  return [];
+}
+
+export function saveDeletedWordId(id: number) {
+  try {
+    const current = getDeletedWordIds();
+    if (!current.includes(id)) {
+      current.push(id);
+      localStorage.setItem(DELETED_WORDS_KEY, JSON.stringify(current));
+    }
+  } catch {}
+}
+
+export function bulkDeleteWords(ids: number[]) {
+  try {
+    const current = new Set(getDeletedWordIds());
+    ids.forEach((id) => current.add(id));
+    localStorage.setItem(DELETED_WORDS_KEY, JSON.stringify(Array.from(current)));
+  } catch {}
+}
+
+export function bulkUpdateCategory(ids: number[], category: CategoryId) {
+  try {
+    const current = getWordOverrides();
+    ids.forEach((id) => {
+      current[id] = { ...(current[id] || {}), category };
+    });
+    localStorage.setItem(WORD_OVERRIDES_KEY, JSON.stringify(current));
+  } catch {}
+}
+
 function getCustomWords(): WordItem[] {
   try {
     if (typeof localStorage !== 'undefined') {
@@ -121,7 +185,24 @@ function getCustomWords(): WordItem[] {
 }
 
 export function getFullWordPool(): WordItem[] {
-  return [...getCustomWords(), ...ALL_WORDS];
+  const overrides = getWordOverrides();
+  const deletedSet = new Set(getDeletedWordIds());
+
+  const baseWords = ALL_WORDS.filter((w) => !deletedSet.has(w.id)).map((w) => {
+    if (overrides[w.id]) {
+      return { ...w, ...overrides[w.id] };
+    }
+    return w;
+  });
+
+  const custom = getCustomWords().filter((w) => !deletedSet.has(w.id)).map((w) => {
+    if (overrides[w.id]) {
+      return { ...w, ...overrides[w.id] };
+    }
+    return w;
+  });
+
+  return [...custom, ...baseWords];
 }
 
 // Helper to pick a random word avoiding recently used words in the current match AND across matches

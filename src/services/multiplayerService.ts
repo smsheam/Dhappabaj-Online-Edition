@@ -1016,6 +1016,7 @@ export async function setOnlineRoomPhase(
     };
 
     let phaseEndsAt = durationSeconds > 0 ? now + durationSeconds * 1000 : null;
+    updates.phaseEndsAt = phaseEndsAt;
 
     if (phase === 'CLUE') {
       let clueOrder = preloadedClueOrder;
@@ -1033,10 +1034,22 @@ export async function setOnlineRoomPhase(
         updates.clueTurnIndex = 0;
         updates.clueTurnPlayerId = clueOrder[0];
       }
-    }
-
-    if (phaseEndsAt !== null) {
-      updates.phaseEndsAt = phaseEndsAt;
+    } else if (phase === 'VOTING') {
+      // Ensure all players are reset to hasVoted: false and previous votes are cleared
+      try {
+        const playersSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'players'));
+        const batch = writeBatch(db);
+        playersSnap.docs.forEach((pDoc) => {
+          batch.update(pDoc.ref, { hasVoted: false });
+        });
+        const votesSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'votes'));
+        votesSnap.docs.forEach((vDoc) => {
+          batch.delete(vDoc.ref);
+        });
+        await batch.commit();
+      } catch (err) {
+        console.warn('Error clearing voting state:', err);
+      }
     }
 
     await withTimeout(updateDoc(roomRef, updates), 8000);

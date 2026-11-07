@@ -812,9 +812,29 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
 
               {/* Categories */}
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
-                  {isEn ? 'Categories' : 'ক্যাটাগরি'}
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    {isEn ? 'Categories' : 'ক্যাটাগরি'}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playClick();
+                      const all = Object.keys(CATEGORIES) as CategoryId[];
+                      const current = tempSettings.selectedCategories || [];
+                      if (current.length === all.length) {
+                        setTempSettings({ ...tempSettings, selectedCategories: [all[0]] });
+                      } else {
+                        setTempSettings({ ...tempSettings, selectedCategories: all });
+                      }
+                    }}
+                    className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+                  >
+                    {(tempSettings.selectedCategories || []).length === Object.keys(CATEGORIES).length
+                      ? (isEn ? 'Deselect All' : 'সব বাতিল')
+                      : (isEn ? 'Select All' : 'সব নির্বাচন')}
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   {(Object.keys(CATEGORIES) as CategoryId[]).map((catId) => {
                     const cat = CATEGORIES[catId];

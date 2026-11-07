@@ -27,9 +27,15 @@ export const OnlineVotingScreen: React.FC<OnlineVotingScreenProps> = ({
   const imposterCount = Math.min(room.settings.imposterCount || 1, players.length <= 4 ? 1 : 2);
   const maxVotesAllowed = imposterCount;
   const [selectedSuspectIds, setSelectedSuspectIds] = useState<string[]>([]);
-  const [hasVoted, setHasVoted] = useState<boolean>(currentPlayer.hasVoted);
+  const [hasVoted, setHasVoted] = useState<boolean>(currentPlayer.hasVoted || false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [resolving, setResolving] = useState<boolean>(false);
+
+  // Sync with Firestore player state and reset on new rounds
+  useEffect(() => {
+    setHasVoted(currentPlayer.hasVoted || false);
+    setSelectedSuspectIds([]);
+  }, [currentPlayer.hasVoted, room.currentRound]);
 
   const handleToggleSuspect = (id: string) => {
     sound.playClick();
@@ -65,28 +71,30 @@ export const OnlineVotingScreen: React.FC<OnlineVotingScreenProps> = ({
         sound.playTimerTick();
       }
 
-      // Automatically resolve results on timeout!
+      // Automatically resolve results on timeout - strictly the host
       if (remaining === 0 && !resolving) {
-        clearInterval(interval);
-        handleResolveResults();
+        if (isHost) {
+          clearInterval(interval);
+          handleResolveResults();
+        }
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [room.phaseEndsAt, resolving]);
+  }, [room.phaseEndsAt, resolving, isHost]);
 
   const votedCount = players.filter((p) => p.hasVoted).length;
   const allVoted = votedCount === players.length && players.length > 0;
 
   // Requirement 2: Wait 3 seconds on voting page after all players vote before transitioning!
   useEffect(() => {
-    if (allVoted && !resolving) {
+    if (isHost && allVoted && !resolving) {
       const timer = setTimeout(() => {
         handleResolveResults();
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [allVoted, resolving]);
+  }, [allVoted, resolving, isHost]);
 
   const handleCastVote = async () => {
     if (selectedSuspectIds.length === 0) return;

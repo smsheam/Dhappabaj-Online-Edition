@@ -73,7 +73,14 @@ import {
   getActiveScoringConfig,
   saveActiveScoringConfig,
 } from '../../utils/scoring';
-import { ALL_WORDS, getFullWordPool } from '../../data/words';
+import {
+  ALL_WORDS,
+  getFullWordPool,
+  saveWordOverride,
+  saveDeletedWordId,
+  bulkDeleteWords,
+  bulkUpdateCategory,
+} from '../../data/words';
 import { auth, signInWithGoogle, db } from '../../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { sound } from '../../utils/audio';
@@ -259,8 +266,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     sound.playClick();
   };
 
-  // Word pool
-  const allWordsPool = useMemo(() => getFullWordPool(), [customWords]);
+  // Word pool & selection state
+  const [wordsVersion, setWordsVersion] = useState<number>(0);
+  const [selectedWordIds, setSelectedWordIds] = useState<number[]>([]);
+
+  const allWordsPool = useMemo(() => getFullWordPool(), [customWords, wordsVersion]);
 
   // Duplicate words detection
   const duplicateWords = useMemo(() => {
@@ -296,7 +306,38 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     });
   }, [allWordsPool, searchQuery, selectedCategory, customWords]);
 
-  // Word save handler
+  // Select all / Deselect all filtered words
+  const handleToggleSelectAllWords = () => {
+    sound.playClick();
+    if (selectedWordIds.length === filteredWords.length && filteredWords.length > 0) {
+      setSelectedWordIds([]);
+    } else {
+      setSelectedWordIds(filteredWords.map((w) => w.id));
+    }
+  };
+
+  const handleToggleWordSelect = (id: number) => {
+    sound.playClick();
+    if (selectedWordIds.includes(id)) {
+      setSelectedWordIds(selectedWordIds.filter((item) => item !== id));
+    } else {
+      setSelectedWordIds([...selectedWordIds, id]);
+    }
+  };
+
+  // Edit any existing word (pack or custom)
+  const handleEditWord = (w: WordItem) => {
+    sound.playClick();
+    setEditingWordId(w.id);
+    setNewWordBn(w.wordBn);
+    setNewWordEn(w.wordEn);
+    setNewHintBn(w.hintBn || w.shortHintBn || '');
+    setNewHintEn(w.hintEn || w.shortHintEn || '');
+    setNewCategory(w.category);
+    setIsAddingWord(true);
+  };
+
+  // Word save handler (supports modifying any existing pack word or custom word)
   const handleSaveWord = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newWordBn.trim() || !newWordEn.trim() || !newHintBn.trim()) {
@@ -305,20 +346,28 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
 
     sound.playClick();
-    const saved = await addOrUpdateWord(
-      {
-        wordBn: newWordBn.trim(),
-        wordEn: newWordEn.trim(),
-        hintBn: newHintBn.trim(),
-        hintEn: newHintEn.trim() || newHintBn.trim(),
-        category: newCategory,
-        tag: 'custom',
-      },
-      editingWordId || undefined
-    );
+    const wordPayload: Omit<WordItem, 'id'> = {
+      wordBn: newWordBn.trim(),
+      wordEn: newWordEn.trim(),
+      hintBn: newHintBn.trim(),
+      hintEn: newHintEn.trim() || newHintBn.trim(),
+      shortHintBn: newHintBn.trim(),
+      shortHintEn: newHintEn.trim() || newHintBn.trim(),
+      category: newCategory,
+    };
 
-    const updated = getLocalCustomWords();
-    setCustomWords(updated);
+    if (editingWordId) {
+      saveWordOverride(editingWordId, wordPayload);
+      const isCustom = customWords.some((cw) => cw.id === editingWordId);
+      if (isCustom) {
+        await addOrUpdateWord({ ...wordPayload, tag: 'custom' }, editingWordId);
+      }
+    } else {
+      await addOrUpdateWord({ ...wordPayload, tag: 'custom' });
+    }
+
+    setCustomWords(getLocalCustomWords());
+    setWordsVersion((v) => v + 1);
     setIsAddingWord(false);
     setEditingWordId(null);
     setNewWordBn('');
@@ -328,11 +377,34 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   };
 
   const handleDeleteWord = (id: number) => {
-    if (confirm(isEn ? 'Are you sure you want to remove this custom word?' : 'আপনি কি নিশ্চিত যে এই কাস্টম শব্দটি মুছতে চান?')) {
+    if (confirm(isEn ? 'Are you sure you want to remove this word from the game?' : 'আপনি কি নিশ্চিত যে এই শব্দটি খেলা থেকে মুছতে চান?')) {
       sound.playClick();
       deleteWord(id);
+      saveDeletedWordId(id);
+      setSelectedWordIds((prev) => prev.filter((i) => i !== id));
       setCustomWords(getLocalCustomWords());
+      setWordsVersion((v) => v + 1);
     }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedWordIds.length === 0) return;
+    if (confirm(isEn ? `Delete ${selectedWordIds.length} selected words?` : `নির্বাচিত ${selectedWordIds.length}টি শব্দ মুছবেন?`)) {
+      sound.playClick();
+      bulkDeleteWords(selectedWordIds);
+      selectedWordIds.forEach((id) => deleteWord(id));
+      setSelectedWordIds([]);
+      setCustomWords(getLocalCustomWords());
+      setWordsVersion((v) => v + 1);
+    }
+  };
+
+  const handleBulkChangeCategory = (cat: CategoryId) => {
+    if (selectedWordIds.length === 0) return;
+    sound.playClick();
+    bulkUpdateCategory(selectedWordIds, cat);
+    setSelectedWordIds([]);
+    setWordsVersion((v) => v + 1);
   };
 
   // CSV Export
@@ -855,25 +927,85 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   </select>
                 </div>
 
+                {/* Bulk Actions Bar */}
+                {selectedWordIds.length > 0 && (
+                  <div className="p-2.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2 font-black text-amber-700 dark:text-amber-300">
+                      <span>✓ {isEn ? `${selectedWordIds.length} words selected` : `${selectedWordIds.length}টি শব্দ নির্বাচিত`}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) handleBulkChangeCategory(e.target.value as CategoryId);
+                        }}
+                        defaultValue=""
+                        className="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-900 border text-xs font-bold"
+                      >
+                        <option value="" disabled>{isEn ? 'Move to category...' : 'ক্যাটাগরি পরিবর্তন...'}</option>
+                        {Object.entries(CATEGORY_LABELS).slice(2).map(([k, l]) => (
+                          <option key={k} value={k}>{isEn ? l.en : l.bn}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleBulkDelete}
+                        className="px-3 py-1 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold cursor-pointer transition-colors shadow-xs"
+                      >
+                        {isEn ? 'Delete Selected' : 'নির্বাচিতগুলো মুছুন'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedWordIds([])}
+                        className="px-2 py-1 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold cursor-pointer"
+                        title={isEn ? 'Deselect All' : 'সব বাতিল'}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Words Table */}
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden text-xs">
-                  <div className="grid grid-cols-12 gap-2 p-3 font-bold bg-slate-50 dark:bg-slate-950 text-slate-500 border-b border-slate-200 dark:border-slate-800">
+                  <div className="grid grid-cols-12 gap-2 p-3 font-bold bg-slate-50 dark:bg-slate-950 text-slate-500 border-b border-slate-200 dark:border-slate-800 items-center">
+                    <div className="col-span-1 flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={filteredWords.length > 0 && selectedWordIds.length === filteredWords.length}
+                        onChange={handleToggleSelectAllWords}
+                        className="w-4 h-4 rounded text-amber-500 cursor-pointer"
+                        title={isEn ? 'Select All / Deselect All' : 'সব নির্বাচন / সব বাতিল'}
+                      />
+                    </div>
                     <span className="col-span-3">{isEn ? 'Word (Bangla / English)' : 'শব্দ'}</span>
-                    <span className="col-span-5">{isEn ? 'Imposter Hint' : 'ধাপ্পাবাজের ইঙ্গিত'}</span>
+                    <span className="col-span-4">{isEn ? 'Imposter Hint' : 'ধাপ্পাবাজের ইঙ্গিত'}</span>
                     <span className="col-span-2">{isEn ? 'Category' : 'ক্যাটাগরি'}</span>
                     <span className="col-span-2 text-right">{isEn ? 'Action' : 'অ্যাকশন'}</span>
                   </div>
 
                   <div className="max-h-96 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60">
-                    {filteredWords.slice(0, 100).map((w) => {
-                      const isCustom = customWords.some((cw) => cw.id === w.id);
+                    {filteredWords.slice(0, 150).map((w) => {
+                      const isSelected = selectedWordIds.includes(w.id);
                       return (
-                        <div key={w.id} className="grid grid-cols-12 gap-2 p-3 items-center hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                          <div className="col-span-3">
-                            <span className="font-bold text-slate-900 dark:text-white block">{w.wordBn}</span>
-                            <span className="text-[11px] text-slate-400 font-mono">{w.wordEn}</span>
+                        <div
+                          key={w.id}
+                          className={`grid grid-cols-12 gap-2 p-3 items-center transition-colors ${
+                            isSelected ? 'bg-amber-500/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                          }`}
+                        >
+                          <div className="col-span-1 flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleToggleWordSelect(w.id)}
+                              className="w-4 h-4 rounded text-amber-500 cursor-pointer"
+                            />
                           </div>
-                          <div className="col-span-5">
+                          <div className="col-span-3 min-w-0">
+                            <span className="font-bold text-slate-900 dark:text-white block truncate">{w.wordBn}</span>
+                            <span className="text-[11px] text-slate-400 font-mono block truncate">{w.wordEn}</span>
+                          </div>
+                          <div className="col-span-4 min-w-0">
                             <span className="text-amber-600 dark:text-amber-400 font-semibold block truncate">
                               "{w.hintBn || w.shortHintBn}"
                             </span>
@@ -891,20 +1023,26 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               type="button"
                               onClick={() => setPreviewWord(w)}
                               className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-amber-500 cursor-pointer"
-                              title="Preview"
+                              title={isEn ? 'Preview Word Card' : 'প্রিভিউ'}
                             >
                               <Eye className="w-3.5 h-3.5" />
                             </button>
-                            {isCustom && (
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteWord(w.id)}
-                                className="p-1.5 rounded-lg bg-rose-500/15 text-rose-500 hover:bg-rose-500 hover:text-white cursor-pointer"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleEditWord(w)}
+                              className="p-1.5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500 hover:text-slate-950 cursor-pointer transition-colors"
+                              title={isEn ? 'Edit Word & Hint' : 'সম্পাদনা'}
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteWord(w.id)}
+                              className="p-1.5 rounded-lg bg-rose-500/15 text-rose-500 hover:bg-rose-500 hover:text-white cursor-pointer transition-colors"
+                              title={isEn ? 'Delete Word' : 'মুছুন'}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
                       );
@@ -1415,8 +1553,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono text-[11px]">
                     <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border flex justify-between">
-                      <span className="text-slate-500">Project ID:</span>
-                      <span className="font-semibold text-slate-800 dark:text-slate-200">semiotic-dryad-kwpgt</span>
+                      <span className="text-slate-500">Project Name:</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">dhappabaj (semiotic-dryad-kwpgt)</span>
                     </div>
                     <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border flex justify-between">
                       <span className="text-slate-500">Firestore DB ID:</span>

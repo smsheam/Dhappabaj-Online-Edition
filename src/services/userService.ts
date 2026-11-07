@@ -13,6 +13,7 @@ import {
   signInAnonymously,
   signInWithPopup,
   linkWithPopup,
+  signOut,
   User,
 } from 'firebase/auth';
 import { db, auth, googleProvider } from '../firebase';
@@ -62,13 +63,16 @@ export function createDefaultProfile(uid: string, isGuest: boolean = true, email
     displayName: name,
     username: name.toLowerCase().replace(/[\s#]/g, '_'),
     photoURL: photoURL || null,
+    bio: isGuest ? 'ধাপ্পাবাজ খেলায় নতুন গোয়েন্দা' : 'চতুর গোয়েন্দা ও ধাপ্পাবাজ শিকারী',
     accountType: isGuest ? 'guest' : 'google',
     createdAt: now,
     updatedAt: now,
+    hasCompletedOnboarding: false,
     isBanned: false,
     customization: {
       ...DEFAULT_CUSTOMIZATION,
       avatar: isGuest ? '🕵️' : '🦊',
+      bio: isGuest ? 'ধাপ্পাবাজ খেলায় নতুন গোয়েন্দা' : 'চতুর গোয়েন্দা ও ধাপ্পাবাজ শিকারী',
     },
     stats: { ...DEFAULT_STATS },
     unlockedBadges: [],
@@ -193,6 +197,16 @@ export async function loginWithGoogle(): Promise<UserProfile> {
   }
 
   return profile;
+}
+
+// Sign out user
+export async function signOutUser(): Promise<void> {
+  try {
+    localStorage.removeItem(USER_STORAGE_KEY);
+    await signOut(auth);
+  } catch (err) {
+    console.warn('Sign-out error:', err);
+  }
 }
 
 // Upgrade / Link guest account to Google

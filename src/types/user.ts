@@ -6,6 +6,7 @@ export interface UserCustomization {
   skinBadge?: string; // cosmetic badge/frame unlocked via achievements
   favoriteCategory?: string;
   customTitle?: string;
+  bio?: string; // Player bio / motto
 }
 
 export interface UserStats {
@@ -28,9 +29,11 @@ export interface UserProfile {
   displayName: string;
   username: string;
   photoURL?: string | null;
+  bio?: string;
   accountType: AccountType;
   createdAt: number;
   updatedAt: number;
+  hasCompletedOnboarding?: boolean;
   isBanned?: boolean;
   bannedReason?: string;
   customization: UserCustomization;

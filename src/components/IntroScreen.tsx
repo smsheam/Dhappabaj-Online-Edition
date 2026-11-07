@@ -27,6 +27,8 @@ interface IntroScreenProps {
   onOpenProfile: () => void;
   onOpenSettings: () => void;
   onOpenAdmin: () => void;
+  onOpenSignIn?: () => void;
+  onSignOut?: () => void;
   onExitApp?: () => void;
   canAccessAdmin: boolean;
   userProfile: UserProfile | null;
@@ -45,6 +47,8 @@ export const IntroScreen: React.FC<IntroScreenProps> = ({
   onOpenProfile,
   onOpenSettings,
   onOpenAdmin,
+  onOpenSignIn,
+  onSignOut,
   onExitApp,
   canAccessAdmin,
   userProfile,
@@ -71,33 +75,48 @@ export const IntroScreen: React.FC<IntroScreenProps> = ({
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between p-4 sm:p-6 max-w-xl mx-auto transition-colors duration-200">
       {/* Top Header Controls Bar */}
       <div className="flex items-center justify-between gap-2">
-        {/* User Profile Mini Badge */}
+        {/* Top-Left: Player Name & Sign Out, or Sign In button */}
         {userProfile ? (
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                sound.playClick();
+                onOpenProfile();
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs hover:border-amber-500/50 cursor-pointer transition-all"
+              title={isEn ? 'Edit Profile' : 'প্রোফাইল পরিবর্তন'}
+            >
+              <span className="text-sm">{userProfile.customization?.avatar || '🕵️'}</span>
+              <span className="text-xs font-black text-slate-900 dark:text-white max-w-[110px] truncate leading-tight">
+                {userProfile.displayName}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                sound.playClick();
+                if (onSignOut) onSignOut();
+              }}
+              className="px-2 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-600 dark:text-rose-400 text-xs font-bold border border-rose-500/20 flex items-center gap-1 transition-all cursor-pointer"
+              title={isEn ? 'Sign Out' : 'সাইন আউট'}
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden xs:inline sm:inline">{isEn ? 'Sign Out' : 'আউট'}</span>
+            </button>
+          </div>
+        ) : (
           <button
             type="button"
             onClick={() => {
               sound.playClick();
-              onOpenProfile();
+              if (onOpenSignIn) onOpenSignIn();
             }}
-            className="flex items-center gap-2 p-1.5 pr-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs hover:border-amber-500/50 cursor-pointer transition-all"
+            className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
           >
-            <div
-              className="w-7 h-7 rounded-xl flex items-center justify-center text-base"
-              style={{ backgroundColor: userProfile.customization?.avatarColor || '#f59e0b' }}
-            >
-              {userProfile.customization?.avatar || '🕵️'}
-            </div>
-            <div className="text-left">
-              <span className="text-xs font-black text-slate-900 dark:text-white block max-w-[110px] truncate leading-tight">
-                {userProfile.displayName}
-              </span>
-              <span className="text-[10px] font-mono text-amber-500 block leading-none">
-                🏆 {userProfile.stats?.totalPoints || 0} pts
-              </span>
-            </div>
+            <User className="w-3.5 h-3.5" />
+            <span>{isEn ? 'Sign In' : 'সাইন ইন'}</span>
           </button>
-        ) : (
-          <div />
         )}
 
         {/* Right utility buttons */}

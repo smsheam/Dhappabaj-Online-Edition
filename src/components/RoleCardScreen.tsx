@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, EyeOff, ArrowRight, Image as ImageIcon } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { Player, WordItem, Language, Theme } from '../types/game';
 import { getHardHint, getShortExplanation } from '../utils/hintHelper';
 import { getWordImageUrl } from '../utils/wordImageService';
+import { getAiWordDescription, AiWordDescription } from '../services/aiDescriptionService';
 import { sound } from '../utils/audio';
 import { PlayerAvatar } from './PlayerAvatar';
 
@@ -30,6 +31,7 @@ export const RoleCardScreen: React.FC<RoleCardScreenProps> = ({
   const [isRevealed, setIsRevealed] = useState<boolean>(true);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState<boolean>(!isImposter);
+  const [aiDesc, setAiDesc] = useState<AiWordDescription | null>(null);
 
   useEffect(() => {
     if (isImposter) return;
@@ -41,6 +43,13 @@ export const RoleCardScreen: React.FC<RoleCardScreenProps> = ({
         setImageLoading(false);
       }
     });
+
+    getAiWordDescription(word).then((desc) => {
+      if (isMounted) {
+        setAiDesc(desc);
+      }
+    });
+
     return () => {
       isMounted = false;
     };
@@ -187,6 +196,19 @@ export const RoleCardScreen: React.FC<RoleCardScreenProps> = ({
                   ({explanation})
                 </p>
               </div>
+
+              {/* AI-Driven Word Description for Innocent Citizens */}
+              {aiDesc && (
+                <div className="p-3 rounded-2xl bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 text-left space-y-1 mt-2">
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-700 dark:text-amber-400">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    <span>{isEn ? 'AI Word Insight (Citizens Only):' : 'এআই শব্দ পরিচিতি (শুধুমাত্র নির্দোষদের জন্য):'}</span>
+                  </div>
+                  <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-medium">
+                    {isEn ? aiDesc.en : aiDesc.bn}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>

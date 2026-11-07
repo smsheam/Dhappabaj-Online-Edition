@@ -155,10 +155,15 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
 
                 {/* Content */}
                 <div className="flex-1 min-w-0 space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className="text-sm font-black text-slate-900 dark:text-white truncate">
-                      {isEn ? ach.titleEn : ach.titleBn}
-                    </h4>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h4 className="text-sm font-black text-slate-900 dark:text-white truncate">
+                        {ach.titleEn}
+                      </h4>
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold block">
+                        {ach.titleBn}
+                      </span>
+                    </div>
 
                     {isUnlocked ? (
                       <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 shrink-0">
@@ -172,8 +177,11 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
                     )}
                   </div>
 
-                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-snug">
-                    {isEn ? ach.descEn : ach.descBn}
+                  <p className="text-xs text-slate-700 dark:text-slate-200 leading-snug font-medium">
+                    {ach.descEn}
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                    {ach.descBn}
                   </p>
 
                   {/* Progress Bar */}
