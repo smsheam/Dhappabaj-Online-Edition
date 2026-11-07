@@ -1458,13 +1458,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   </h4>
                   <p>
                     {isEn
-                      ? 'The Firebase free tier allows 50,000 reads and 20,000 writes every single day.'
-                      : 'ফায়ারবেস ফ্রি স্পার্ক প্ল্যানে প্রতিদিন ৫০,০০০ রিড ও ২০,০০০ রাইট সম্পূর্ণ ফ্রি। সীমা অতিক্রম করলে প্যাসিফিক মধ্যরাতে এটি স্বয়ংক্রিয় রিসেট হয়।'}
+                      ? 'Firestore free quotas depend on the database and billing configuration. Check the exact database in Firebase Console before relying on a free allowance.'
+                      : 'Firestore-এর ফ্রি কোটা ডাটাবেস ও বিলিং কনফিগারেশনের ওপর নির্ভর করে। Firebase Console থেকে আপনার ব্যবহৃত নির্দিষ্ট ডাটাবেসের কোটা যাচাই করুন।'}
                   </p>
                   <p className="font-bold text-amber-700 dark:text-amber-300">
                     {isEn
-                      ? 'Best practice: In Firebase Console, upgrade the project to Blaze Plan (Pay as you go). You still get the 50,000 daily reads 100% free forever, and any extra reads cost just $0.06 per 100,000 reads, meaning your game will NEVER freeze!'
-                      : 'স্থায়ী সমাধান: Firebase Console এ গিয়ে প্রজেক্টটিকে Blaze Plan এ উন্নীত করুন। ৫০,০০০ দৈনিক ফ্রি সীমা সবসময় বহাল থাকবে এবং খেলা কখনো আটকে যাবে না!'}
+                      ? 'On Spark, exceeding a free quota can cause requests to fail until the quota resets. On Blaze, usage above applicable free allowances is billed. Set budget alerts and monitor Firestore reads, writes, storage and network usage. Budget alerts do not automatically stop charges.'
+                      : 'Spark প্ল্যানে কোটা শেষ হলে রিসেট না হওয়া পর্যন্ত কিছু request ব্যর্থ হতে পারে। Blaze প্ল্যানে ফ্রি সীমার বেশি ব্যবহার অনুযায়ী বিল হতে পারে। Budget alert চালু করুন এবং নিয়মিত reads, writes, storage ও network usage দেখুন। Budget alert নিজে থেকে খরচ বন্ধ করে না।'}
                   </p>
                 </div>
 
