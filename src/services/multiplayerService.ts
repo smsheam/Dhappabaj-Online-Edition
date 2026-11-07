@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  Timestamp,
   getDoc,
   getDocs,
   updateDoc,
@@ -195,6 +196,7 @@ export async function createOnlineRoom(
       status: 'CLOSED',
       closedReason: 'host_left',
       updatedAt: Date.now(),
+      expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000),
     }).then(() => cleanupRoomSubcollections(previousRoomCode)).catch(() => {});
     sessionStorage.removeItem(`dhappabaj_host_token_${previousRoomCode}`);
     sessionStorage.removeItem('dhappabaj_active_room');
@@ -352,6 +354,7 @@ export async function joinOnlineRoom(
         status: 'EXPIRED',
         closedReason: 'inactivity_timeout',
         updatedAt: now,
+        expiresAt: Timestamp.fromMillis(now + 24 * 60 * 60 * 1000),
       });
       await cleanupRoomSubcollections(roomCode);
     } catch {
@@ -559,6 +562,7 @@ export async function closeOnlineRoom(roomCode: string, reason: RoomClosedReason
       status: 'CLOSED',
       closedReason: reason,
       updatedAt: Date.now(),
+      expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000),
     });
     await cleanupRoomSubcollections(roomCode);
   } catch (error) {
@@ -593,6 +597,7 @@ export async function leaveOnlineRoom(roomCode: string) {
         status: 'CLOSED',
         closedReason: 'host_left',
         updatedAt: Date.now(),
+        expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000),
       });
       await cleanupRoomSubcollections(roomCode);
     } else {
@@ -617,6 +622,7 @@ export async function leaveOnlineRoom(roomCode: string) {
           closedReason: 'empty_room',
           playerCount: 0,
           updatedAt: now,
+          expiresAt: Timestamp.fromMillis(now + 24 * 60 * 60 * 1000),
         });
         await cleanupRoomSubcollections(roomCode);
       }
@@ -725,6 +731,7 @@ export async function checkAndExpireRoomIfNeeded(
         status: 'CLOSED',
         closedReason: 'host_disconnected',
         updatedAt: now,
+        expiresAt: Timestamp.fromMillis(now + 24 * 60 * 60 * 1000),
       });
       await cleanupRoomSubcollections(roomCode);
       return true;
@@ -742,6 +749,7 @@ export async function checkAndExpireRoomIfNeeded(
         status: 'EXPIRED',
         closedReason: 'inactivity_timeout',
         updatedAt: now,
+        expiresAt: Timestamp.fromMillis(now + 24 * 60 * 60 * 1000),
       });
       await cleanupRoomSubcollections(roomCode);
       return true;
