@@ -194,17 +194,15 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
       (err) => console.error('Votes subscription error:', err)
     );
 
-    // Heartbeat every 35 seconds & check inactivity / host disconnect (throttled to preserve Firestore quota)
+    // Heartbeat every 120 seconds to reduce Firestore writes and listener fan-out
     const heartbeatInterval = setInterval(async () => {
       const myPlayer = playersStateRef.current.find((p) => p.id === currentUserId);
       if (myPlayer) {
-        await sendPlayerHeartbeat(initialRoom.roomCode, isHost, myPlayer.name, myPlayer.avatar);
+        await sendPlayerHeartbeat(initialRoom.roomCode, isHost, myPlayer.name, myPlayer.avatar, playersStateRef.current.length);
       }
-      // Check inactivity & host disconnect expiration (host only to prevent redundant writes)
-      if (isHost) {
-        await checkAndExpireRoomIfNeeded(initialRoom.roomCode, roomStateRef.current);
-      }
-    }, 35000);
+      // Any connected room member can trigger expiry after the configured inactivity window.
+      await checkAndExpireRoomIfNeeded(initialRoom.roomCode, roomStateRef.current);
+    }, 120000);
 
     // Window beforeunload listener for intentional tab close
     const handleBeforeUnload = () => {

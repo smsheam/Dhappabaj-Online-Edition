@@ -1,9 +1,9 @@
 import {
   collection,
   doc,
+  Timestamp,
   getDoc,
   getDocs,
-  setDoc,
   updateDoc,
   deleteDoc,
   onSnapshot,
@@ -14,9 +14,6 @@ import {
   CollectionReference,
   QuerySnapshot,
   enableNetwork,
-  query,
-  orderBy,
-  limit,
   arrayUnion,
 } from 'firebase/firestore';
 import { db, auth, ensureAuthenticatedUser, resetToFreshSession, handleFirestoreError, OperationType } from '../firebase';
@@ -118,7 +115,6 @@ import {
   RoomSettings,
   OnlineVote,
   OnlineGamePhase,
-  ChatMessage,
   RoomClosedReason,
 } from '../types/multiplayer';
 import { WordItem, CategoryId } from '../types/game';
@@ -200,7 +196,8 @@ export async function createOnlineRoom(
       status: 'CLOSED',
       closedReason: 'host_left',
       updatedAt: Date.now(),
-    }).catch(() => {});
+      expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000),
+    }).then(() => cleanupRoomSubcollections(previousRoomCode)).catch(() => {});
     sessionStorage.removeItem(`dhappabaj_host_token_${previousRoomCode}`);
     sessionStorage.removeItem('dhappabaj_active_room');
   }
@@ -357,7 +354,9 @@ export async function joinOnlineRoom(
         status: 'EXPIRED',
         closedReason: 'inactivity_timeout',
         updatedAt: now,
+        expiresAt: Timestamp.fromMillis(now + 24 * 60 * 60 * 1000),
       });
+      await cleanupRoomSubcollections(roomCode);
     } catch {
       // Ignore update error on expired check
     }
@@ -422,7 +421,7 @@ export async function joinOnlineRoom(
     try {
       const batch = writeBatch(db);
       batch.update(playerRef, playerUpdates);
-      batch.update(roomRef, roomUpdates);
+      if (isHost) batch.update(roomRef, roomUpdates);
       await batch.commit();
 
       sessionStorage.setItem('dhappabaj_active_room', roomCode);
@@ -549,6 +548,22 @@ export async function joinOnlineRoom(
   }
 }
 
+/**
+ * Remove room subcollection documents after a room is closed or expired.
+ * Firestore does not cascade-delete subcollections when a parent document is deleted.
+ */
+export async function cleanupRoomSubcollections(roomCode: string): Promise<void> {
+  const subcollections = ['players', 'private', 'votes', 'messages'];
+  for (const subcollectionName of subcollections) {
+    const snapshot = await safeGetDocs(collection(db, 'rooms', roomCode, subcollectionName));
+    for (let offset = 0; offset < snapshot.docs.length; offset += 450) {
+      const batch = writeBatch(db);
+      snapshot.docs.slice(offset, offset + 450).forEach((item) => batch.delete(item.ref));
+      await batch.commit();
+    }
+  }
+}
+
 // 3. Close room explicitly (authoritative)
 export async function closeOnlineRoom(roomCode: string, reason: RoomClosedReason = 'host_left') {
   try {
@@ -557,7 +572,9 @@ export async function closeOnlineRoom(roomCode: string, reason: RoomClosedReason
       status: 'CLOSED',
       closedReason: reason,
       updatedAt: Date.now(),
+      expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000),
     });
+    await cleanupRoomSubcollections(roomCode);
   } catch (error) {
     console.error('Error closing room:', error);
   } finally {
@@ -590,12 +607,9 @@ export async function leaveOnlineRoom(roomCode: string) {
         status: 'CLOSED',
         closedReason: 'host_left',
         updatedAt: Date.now(),
+        expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000),
       });
-      try {
-        await deleteDoc(playerRef);
-      } catch {
-        // Best effort
-      }
+      await cleanupRoomSubcollections(roomCode);
     } else {
       // Ordinary player leaving: mark as disconnected/offline with 35s grace period (Requirement 8)
       const now = Date.now();
@@ -618,7 +632,9 @@ export async function leaveOnlineRoom(roomCode: string) {
           closedReason: 'empty_room',
           playerCount: 0,
           updatedAt: now,
+          expiresAt: Timestamp.fromMillis(now + 24 * 60 * 60 * 1000),
         });
+        await cleanupRoomSubcollections(roomCode);
       } else {
         await updateDoc(roomRef, {
           playerCount: activePlayers.length,
@@ -675,7 +691,8 @@ export async function sendPlayerHeartbeat(
   roomCode: string,
   isHost: boolean,
   name?: string,
-  avatar?: string
+  avatar?: string,
+  playerCount?: number
 ) {
   const user = auth.currentUser;
   if (!user) return;
@@ -698,6 +715,7 @@ export async function sendPlayerHeartbeat(
       await updateDoc(roomRef, {
         lastActivityAt: now,
         hostDisconnectedAt: null,
+        ...(typeof playerCount === 'number' ? { playerCount } : {}),
       });
     }
   } catch (error) {
@@ -729,7 +747,9 @@ export async function checkAndExpireRoomIfNeeded(
         status: 'CLOSED',
         closedReason: 'host_disconnected',
         updatedAt: now,
+        expiresAt: Timestamp.fromMillis(now + 24 * 60 * 60 * 1000),
       });
+      await cleanupRoomSubcollections(roomCode);
       return true;
     } catch {
       return false;
@@ -745,7 +765,9 @@ export async function checkAndExpireRoomIfNeeded(
         status: 'EXPIRED',
         closedReason: 'inactivity_timeout',
         updatedAt: now,
+        expiresAt: Timestamp.fromMillis(now + 24 * 60 * 60 * 1000),
       });
+      await cleanupRoomSubcollections(roomCode);
       return true;
     } catch {
       return false;
@@ -765,7 +787,6 @@ export async function updateOnlinePlayerProfile(
   if (!user) return;
 
   const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
-  const roomRef = doc(db, 'rooms', roomCode);
   const now = Date.now();
 
   const updates: Record<string, any> = {
@@ -778,7 +799,6 @@ export async function updateOnlinePlayerProfile(
 
   try {
     await updateDoc(playerRef, updates);
-    await updateDoc(roomRef, { lastActivityAt: now });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `rooms/${roomCode}/players/${user.uid}`);
   }
@@ -790,7 +810,6 @@ export async function togglePlayerReady(roomCode: string, isReady: boolean) {
   if (!user) return;
 
   const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
-  const roomRef = doc(db, 'rooms', roomCode);
   const now = Date.now();
 
   try {
@@ -798,7 +817,6 @@ export async function togglePlayerReady(roomCode: string, isReady: boolean) {
       isReady,
       lastSeenAt: now,
     });
-    await updateDoc(roomRef, { lastActivityAt: now });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `rooms/${roomCode}/players/${user.uid}`);
   }
@@ -847,15 +865,15 @@ export async function startOnlineRound(roomCode: string, roundNumber: number = 1
   if (!roomSnap.exists()) return;
 
   const roomData = roomSnap.data() as OnlineRoomData;
+  if (roomData.hostId !== auth.currentUser?.uid) {
+    throw new Error('শুধুমাত্র হোস্ট খেলাটি শুরু করতে পারবেন (Only the host can start the game)');
+  }
   const playersSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'players'));
   const players = playersSnap.docs.map((d) => d.data() as OnlinePlayer);
 
   if (players.length < 3) {
     throw new Error('খেলা শুরু করতে কমপক্ষে ৩ জন খেলোয়াড় প্রয়োজন (Minimum 3 players required to start)');
   }
-
-  // Purge any temporary voice messages from previous gameplay (zero storage guarantee)
-  purgeOnlineVoiceMessages(roomCode).catch(() => {});
 
   // Pick random word
   const categories = roomData.settings.selectedCategories || ['food', 'people', 'object', 'animal'];
@@ -951,12 +969,6 @@ export async function startOnlineRound(roomCode: string, roundNumber: number = 1
     batch.delete(vDoc.ref);
   });
 
-  // Delete previous messages if any
-  const msgsSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'messages'));
-  msgsSnap.docs.forEach((mDoc) => {
-    batch.delete(mDoc.ref);
-  });
-
   // Completely randomize clue order & first speaker each round (never fixed to host!)
   const shuffledPlayers = [...players];
   for (let i = shuffledPlayers.length - 1; i > 0; i--) {
@@ -1006,6 +1018,10 @@ export async function setOnlineRoomPhase(
   preloadedClueOrder?: string[]
 ) {
   const roomRef = doc(db, 'rooms', roomCode);
+  const user = auth.currentUser;
+  if (!user) return;
+  const currentRoom = await safeGetDoc(roomRef);
+  if (!currentRoom.exists() || (currentRoom.data() as OnlineRoomData).hostId !== user.uid) return;
   const now = Date.now();
 
   try {
@@ -1081,6 +1097,7 @@ export async function submitOnlineClue(roomCode: string, clueText: string) {
     const roomSnap = await safeGetDoc(roomRef);
     if (!roomSnap.exists()) return;
     const roomData = roomSnap.data() as OnlineRoomData;
+    if (roomData.currentPhase !== 'CLUE' || roomData.clueTurnPlayerId !== user.uid) return;
 
     // Save current player's clue
     await updateDoc(playerRef, {
@@ -1145,6 +1162,7 @@ export async function advanceOnlineClueTurn(roomCode: string, timedOutPlayerId?:
     if (!roomSnap.exists()) return;
     const roomData = roomSnap.data() as OnlineRoomData;
 
+    if (roomData.hostId !== auth.currentUser?.uid) return;
     if (roomData.currentPhase !== 'CLUE') return;
     if (timedOutPlayerId && roomData.clueTurnPlayerId !== timedOutPlayerId) {
       // Another client already advanced the turn
@@ -1222,7 +1240,6 @@ export async function castOnlineVote(roomCode: string, suspectInput: string | st
 
   const voteRef = doc(db, 'rooms', roomCode, 'votes', user.uid);
   const playerRef = doc(db, 'rooms', roomCode, 'players', user.uid);
-  const roomRef = doc(db, 'rooms', roomCode);
   const now = Date.now();
 
   const voteData: OnlineVote = {
@@ -1236,7 +1253,6 @@ export async function castOnlineVote(roomCode: string, suspectInput: string | st
     const batch = writeBatch(db);
     batch.set(voteRef, sanitizeForFirestore(voteData));
     batch.update(playerRef, { hasVoted: true, lastSeenAt: now });
-    batch.update(roomRef, { lastActivityAt: now });
     await batch.commit();
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `rooms/${roomCode}/votes/${user.uid}`);
@@ -1250,6 +1266,7 @@ export async function resolveOnlineVotingResults(roomCode: string) {
   if (!roomSnap.exists()) return;
 
   const roomData = roomSnap.data() as OnlineRoomData;
+  if (roomData.hostId !== auth.currentUser?.uid) return;
   // Guard against concurrent executions from multiple clients
   if (roomData.currentPhase !== 'VOTING') return;
 
@@ -1364,6 +1381,7 @@ export async function submitOnlineImposterGuess(
 
   const roomData = roomSnap.data() as OnlineRoomData;
   if (roomData.currentPhase !== 'IMPOSTER_GUESS') return;
+  if (!(roomData.revealedImposterIds || []).includes(auth.currentUser?.uid || '')) return;
 
   const secretWord = roomData.revealedWord;
   if (!secretWord) return;
@@ -1575,7 +1593,6 @@ export async function confirmOnlineCardSeen(roomCode: string, playerId?: string)
   }
 
   const playerRef = doc(db, 'rooms', roomCode, 'players', activeUid);
-  const roomRef = doc(db, 'rooms', roomCode);
   const now = Date.now();
 
   try {
@@ -1586,8 +1603,6 @@ export async function confirmOnlineCardSeen(roomCode: string, playerId?: string)
       }),
       6000
     );
-    // Touch room activity non-blockingly
-    updateDoc(roomRef, { lastActivityAt: now }).catch(() => {});
   } catch (error) {
     console.error('Error in confirmOnlineCardSeen:', error);
     try {
@@ -1599,103 +1614,3 @@ export async function confirmOnlineCardSeen(roomCode: string, playerId?: string)
     }
   }
 }
-
-export const CHAT_COOLDOWN_MS = 5000;
-let lastChatSendTime = 0;
-
-// Send discussion quick chat message (enforces 5-second cooldown & character limit)
-export async function sendOnlineChatMessage(
-  roomCode: string,
-  player: OnlinePlayer,
-  text: string
-): Promise<{ success: boolean; cooldownRemaining?: number }> {
-  const user = auth.currentUser;
-  if (!user || !text.trim()) return { success: false };
-
-  const now = Date.now();
-  const timeSinceLast = now - lastChatSendTime;
-  if (timeSinceLast < CHAT_COOLDOWN_MS) {
-    const remaining = Math.ceil((CHAT_COOLDOWN_MS - timeSinceLast) / 1000);
-    return { success: false, cooldownRemaining: remaining };
-  }
-
-  lastChatSendTime = now;
-  const msgId = `m-${now}-${Math.random().toString(36).slice(2, 6)}`;
-  const msgRef = doc(db, 'rooms', roomCode, 'messages', msgId);
-
-  const messageData: ChatMessage = {
-    id: msgId,
-    senderId: user.uid,
-    senderName: player.name,
-    senderAvatar: player.avatar,
-    senderColor: player.avatarColor,
-    text: text.trim().slice(0, 80),
-    timestamp: now,
-  };
-
-  try {
-    await setDoc(msgRef, sanitizeForFirestore(messageData));
-    return { success: true };
-  } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, `rooms/${roomCode}/messages/${msgId}`);
-    return { success: false };
-  }
-}
-
-// Subscribe to live chat messages (Optimized to last 3 messages only to minimize Firestore reads)
-export function subscribeToChatMessages(
-  roomCode: string,
-  onUpdate: (messages: ChatMessage[]) => void,
-  onError?: (err: unknown) => void
-) {
-  const msgsColl = collection(db, 'rooms', roomCode, 'messages');
-  // Read strictly the last 3 messages
-  const q = query(msgsColl, orderBy('timestamp', 'desc'), limit(3));
-
-  return onSnapshot(
-    q,
-    (snap) => {
-      const list = snap.docs.map((d) => d.data() as ChatMessage);
-      // Reverse to chronological order (oldest of the 3 on top, latest at bottom)
-      list.reverse();
-      onUpdate(list);
-    },
-    (error) => {
-      handleFirestoreError(error, OperationType.LIST, `rooms/${roomCode}/messages`);
-      if (onError) onError(error);
-    }
-  );
-}
-
-// Voice chat is disabled to eliminate Firestore read/write quota exhaustion
-export async function sendOnlineVoiceMessage(
-  _roomCode: string,
-  _player: OnlinePlayer,
-  _audioBase64: string,
-  _durationMs: number = 2500
-) {
-  // Disabled by user request to preserve Firebase Spark free quota
-  console.info('Voice message broadcasting is disabled to optimize Firestore reads and writes.');
-}
-
-// Purge voice messages after gameplay to guarantee zero retained audio
-export async function purgeOnlineVoiceMessages(roomCode: string) {
-  try {
-    const msgsSnap = await safeGetDocs(collection(db, 'rooms', roomCode, 'messages'));
-    const batch = writeBatch(db);
-    let count = 0;
-    msgsSnap.docs.forEach((d) => {
-      const data = d.data() as ChatMessage;
-      if (data.isVoice) {
-        batch.delete(d.ref);
-        count++;
-      }
-    });
-    if (count > 0) {
-      await batch.commit();
-    }
-  } catch (err) {
-    console.warn('Voice purge error:', err);
-  }
-}
-

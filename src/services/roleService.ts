@@ -5,8 +5,6 @@ import {
   getDocs,
   setDoc,
   deleteDoc,
-  query,
-  where,
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { UserRoleRecord, EditorPermission } from '../types/user';
@@ -49,10 +47,12 @@ export async function getUserRole(uid?: string, email?: string): Promise<{ role:
     };
   }
 
-  // 2. Editor check via Firestore roles
-  if (targetUid) {
+  // 2. Editor check via the email-derived role document ID.
+  // This avoids a collection-wide query and lets users read only their own role record.
+  if (targetEmail) {
     try {
-      const roleDoc = await getDoc(doc(db, 'roles', targetUid));
+      const recordId = targetEmail.toLowerCase().replace(/[^a-zA-Z0-9]/g, '_');
+      const roleDoc = await getDoc(doc(db, 'roles', recordId));
       if (roleDoc.exists()) {
         const data = roleDoc.data() as UserRoleRecord;
         return {
@@ -61,15 +61,11 @@ export async function getUserRole(uid?: string, email?: string): Promise<{ role:
         };
       }
     } catch {}
-  }
-
-  // Fallback check by email if uid didn't match
-  if (targetEmail) {
+  } else if (targetUid) {
     try {
-      const q = query(collection(db, 'roles'), where('email', '==', targetEmail.toLowerCase()));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const data = snap.docs[0].data() as UserRoleRecord;
+      const roleDoc = await getDoc(doc(db, 'roles', targetUid));
+      if (roleDoc.exists()) {
+        const data = roleDoc.data() as UserRoleRecord;
         return {
           role: data.role || 'editor',
           permissions: data.permissions || DEFAULT_EDITOR_PERMISSIONS,

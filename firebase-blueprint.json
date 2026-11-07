@@ -94,21 +94,6 @@
       },
       "required": ["voterId", "suspectId"]
     },
-    "Message": {
-      "title": "Message",
-      "description": "Live chat message during discussion phase",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string", "maxLength": 64 },
-        "senderId": { "type": "string", "maxLength": 128 },
-        "senderName": { "type": "string", "maxLength": 64 },
-        "senderAvatar": { "type": "string", "maxLength": 16 },
-        "senderColor": { "type": "string", "maxLength": 32 },
-        "text": { "type": "string", "maxLength": 160 },
-        "timestamp": { "type": "number" }
-      },
-      "required": ["id", "senderId", "senderName", "text", "timestamp"]
-    },
     "CustomWord": {
       "title": "CustomWord",
       "description": "Custom word added by operator via master admin dashboard",
@@ -140,10 +125,6 @@
     "/rooms/{roomId}/votes/{playerId}": {
       "schema": "Vote",
       "description": "Individual player votes cast during voting phase"
-    },
-    "/rooms/{roomId}/messages/{messageId}": {
-      "schema": "Message",
-      "description": "Live discussion messages"
     },
     "/game_config/custom_words/items/{wordId}": {
       "schema": "CustomWord",

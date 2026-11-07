@@ -122,18 +122,15 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
     return () => clearInterval(interval);
   }, [room.phaseEndsAt, room.currentPhase, currentPlayer.isHost]);
 
-  // 2. Requirement 3 & 4: Automatically advance to Clue stage when all players confirm their card!
+  // The room host advances after all players confirm their cards.
   useEffect(() => {
-    if (allConfirmed && room.currentPhase === 'ROLE_REVEAL') {
-      // Primary: Host client initiates advance quickly (1s).
-      // Fallback: If host tab is asleep or slow, other clients will advance after 3s.
-      const delay = currentPlayer.isHost ? 1000 : 3000;
+    if (currentPlayer.isHost && allConfirmed && room.currentPhase === 'ROLE_REVEAL') {
       const timer = setTimeout(() => {
         if (!advanceTriggeredRef.current && room.currentPhase === 'ROLE_REVEAL') {
           advanceTriggeredRef.current = true;
           proceedToClues();
         }
-      }, delay);
+      }, 1000);
 
       return () => clearTimeout(timer);
     }

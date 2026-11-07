@@ -38,17 +38,10 @@ import { OnlineRoomData } from '../../types/multiplayer';
 import { UserProfile, CompletedMatchRecord, UserRoleRecord, EditorPermission } from '../../types/user';
 import {
   ADMIN_AUTHORIZED_EMAIL,
-  ADMIN_MASTER_PASSCODE,
   isUserAdmin,
-  unlockAdminWithPasscode,
-  lockAdminSession,
   getLocalCustomWords,
   addOrUpdateWord,
   deleteWord,
-  getCustomQuickChats,
-  saveCustomQuickChats,
-  CustomQuickChats,
-  DEFAULT_QUICK_CHATS,
   fetchLiveRooms,
   closeRoomByAdmin,
   deleteRoomByAdmin,
@@ -117,7 +110,7 @@ const CATEGORY_LABELS: Record<string, { bn: string; en: string }> = {
   landmarks: { bn: 'স্থাপত্য ও ভাস্কর্য', en: 'Landmarks' },
 };
 
-type AdminTab = 'overview' | 'words' | 'rooms_players' | 'firebase';
+type AdminTab = 'overview' | 'words' | 'rooms_players' | 'firebase' | 'scoring' | 'instructions';
 
 export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   isOpen,
@@ -127,7 +120,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const isEn = lang === 'en';
 
   const [isAdmin, setIsAdmin] = useState<boolean>(() => isUserAdmin());
-  const [passcodeInput, setPasscodeInput] = useState<string>('');
   const [passcodeError, setPasscodeError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -145,11 +137,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [editingWordId, setEditingWordId] = useState<number | null>(null);
   const [previewWord, setPreviewWord] = useState<WordItem | null>(null);
 
-  // Quick chats & content state
-  const [quickChats, setQuickChats] = useState<CustomQuickChats>(() => getCustomQuickChats());
-  const [chatCategory, setChatCategory] = useState<'suspect' | 'defense' | 'fun'>('suspect');
-  const [newChatBn, setNewChatBn] = useState<string>('');
-  const [newChatEn, setNewChatEn] = useState<string>('');
   const [gameAnnouncement, setGameAnnouncement] = useState<string>('স্বাগতম ধাপ্পাবাজে! চতুর আলোচনা করুন এবং ধাপ্পাবাজকে চিহ্নিত করুন।');
 
   // Scoring management state
@@ -229,19 +216,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     setIsPinging(false);
   };
 
-  const handleUnlockWithPasscode = (e: React.FormEvent) => {
-    e.preventDefault();
-    setPasscodeError(null);
-    const success = unlockAdminWithPasscode(passcodeInput);
-    if (success) {
-      sound.playClick();
-      setIsAdmin(true);
-      setPasscodeInput('');
-    } else {
-      setPasscodeError(isEn ? 'Invalid admin passcode' : 'ভুল অ্যাডমিন পাসকোড');
-    }
-  };
-
   const handleGoogleAdminLogin = async () => {
     try {
       const user = await signInWithGoogle();
@@ -251,19 +225,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       } else {
         setPasscodeError(
           isEn
-            ? `Logged in as ${user.email}, but master owner email is ${ADMIN_AUTHORIZED_EMAIL}. Use passcode below.`
-            : `${user.email} দিয়ে লগইন হয়েছে, কিন্তু মাস্টার ওনার ইমেইল ${ADMIN_AUTHORIZED_EMAIL}। নিচের পাসকোড দিয়ে আনলক করুন।`
+            ? `Logged in as ${user.email}, but only the primary owner email (${ADMIN_AUTHORIZED_EMAIL}) can access the admin panel.`
+            : `${user.email} দিয়ে লগইন হয়েছে, কিন্তু শুধু মাস্টার ওনার ইমেইল ${ADMIN_AUTHORIZED_EMAIL} দিয়ে অ্যাডমিন প্যানেল ব্যবহার করা যাবে।`
         );
       }
     } catch (e: any) {
       setPasscodeError(e?.message || 'Login failed');
     }
-  };
-
-  const handleLockSession = () => {
-    lockAdminSession();
-    setIsAdmin(false);
-    sound.playClick();
   };
 
   // Word pool & selection state
@@ -474,31 +442,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     reader.readAsText(file);
   };
 
-  // Quick Chat save
-  const handleAddChat = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newChatBn.trim()) return;
-
-    sound.playClick();
-    const updated = { ...quickChats };
-    updated[chatCategory].unshift({
-      bn: newChatBn.trim(),
-      en: newChatEn.trim() || newChatBn.trim(),
-    });
-    setQuickChats(updated);
-    saveCustomQuickChats(updated);
-    setNewChatBn('');
-    setNewChatEn('');
-  };
-
-  const handleDeleteChat = (category: 'suspect' | 'defense' | 'fun', index: number) => {
-    sound.playClick();
-    const updated = { ...quickChats };
-    updated[category].splice(index, 1);
-    setQuickChats(updated);
-    saveCustomQuickChats(updated);
-  };
-
   // Scoring save
   const handleSaveScoringConfig = async () => {
     sound.playClick();
@@ -573,17 +516,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={handleLockSession}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
-              >
-                <Lock className="w-3.5 h-3.5" />
-                <span>{isEn ? 'Lock Session' : 'লক করুন'}</span>
-              </button>
-            )}
-
             <button
               type="button"
               onClick={onClose}
@@ -607,8 +539,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 {isEn
-                  ? `Sign in with primary owner (${ADMIN_AUTHORIZED_EMAIL}) or enter pass.`
-                  : `মাস্টার ওনার (${ADMIN_AUTHORIZED_EMAIL}) দিয়ে লগইন অথবা পাসকোড প্রবেশ করান।`}
+                  ? `Sign in with the primary owner Google account (${ADMIN_AUTHORIZED_EMAIL}).`
+                  : `মাস্টার ওনার (${ADMIN_AUTHORIZED_EMAIL}) Google অ্যাকাউন্ট দিয়ে সাইন ইন করুন।`}
               </p>
             </div>
 
@@ -628,27 +560,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               <span>{isEn ? 'Sign in with Google' : 'Google দিয়ে সাইন ইন করুন'}</span>
             </button>
 
-            <div className="w-full flex items-center gap-2 text-xs text-slate-400 font-bold uppercase tracking-wider">
-              <div className="flex-1 h-px bg-slate-200 dark:bg-slate-800" />
-              <span>{isEn ? 'OR PASSCODE' : 'অথবা পাসকোড'}</span>
-              <div className="flex-1 h-px bg-slate-200 dark:bg-slate-800" />
-            </div>
-
-            <form onSubmit={handleUnlockWithPasscode} className="w-full space-y-3">
-              <input
-                type="password"
-                value={passcodeInput}
-                onChange={(e) => setPasscodeInput(e.target.value)}
-                placeholder={isEn ? 'Enter Master Passcode' : 'মাস্টার পাসকোড লিখুন'}
-                className="w-full px-4 py-3 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold text-center focus:outline-hidden focus:border-amber-500"
-              />
-              <button
-                type="submit"
-                className="w-full py-3 px-4 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm shadow-lg shadow-amber-500/20 cursor-pointer transition-all"
-              >
-                {isEn ? 'Unlock Dashboard' : 'ড্যাশবোর্ড আনলক করুন'}
-              </button>
-            </form>
           </div>
         ) : (
           /* UNLOCKED DASHBOARD */
@@ -1513,25 +1424,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   </h4>
                   <p>
                     {isEn
-                      ? 'The Firebase free tier allows 50,000 reads and 20,000 writes every single day.'
-                      : 'ফায়ারবেস ফ্রি স্পার্ক প্ল্যানে প্রতিদিন ৫০,০০০ রিড ও ২০,০০০ রাইট সম্পূর্ণ ফ্রি। সীমা অতিক্রম করলে প্যাসিফিক মধ্যরাতে এটি স্বয়ংক্রিয় রিসেট হয়।'}
+                      ? 'Firestore free quotas depend on the database and billing configuration. Check the exact database in Firebase Console before relying on a free allowance.'
+                      : 'Firestore-এর ফ্রি কোটা ডাটাবেস ও বিলিং কনফিগারেশনের ওপর নির্ভর করে। Firebase Console থেকে আপনার ব্যবহৃত নির্দিষ্ট ডাটাবেসের কোটা যাচাই করুন।'}
                   </p>
                   <p className="font-bold text-amber-700 dark:text-amber-300">
                     {isEn
-                      ? 'Best practice: In Firebase Console, upgrade the project to Blaze Plan (Pay as you go). You still get the 50,000 daily reads 100% free forever, and any extra reads cost just $0.06 per 100,000 reads, meaning your game will NEVER freeze!'
-                      : 'স্থায়ী সমাধান: Firebase Console এ গিয়ে প্রজেক্টটিকে Blaze Plan এ উন্নীত করুন। ৫০,০০০ দৈনিক ফ্রি সীমা সবসময় বহাল থাকবে এবং খেলা কখনো আটকে যাবে না!'}
+                      ? 'On Spark, exceeding a free quota can cause requests to fail until the quota resets. On Blaze, usage above applicable free allowances is billed. Set budget alerts and monitor Firestore reads, writes, storage and network usage. Budget alerts do not automatically stop charges.'
+                      : 'Spark প্ল্যানে কোটা শেষ হলে রিসেট না হওয়া পর্যন্ত কিছু request ব্যর্থ হতে পারে। Blaze প্ল্যানে ফ্রি সীমার বেশি ব্যবহার অনুযায়ী বিল হতে পারে। Budget alert চালু করুন এবং নিয়মিত reads, writes, storage ও network usage দেখুন। Budget alert নিজে থেকে খরচ বন্ধ করে না।'}
                   </p>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
-                  <h4 className="font-black text-slate-900 dark:text-white text-sm flex items-center gap-2">
-                    <span>🛡️</span>
-                    <span>{isEn ? 'Master Admin Credentials' : 'মাস্টার অ্যাডমিন ক্রেডেনশিয়াল'}</span>
-                  </h4>
-                  <p className="font-mono text-xs">
-                    Email: <strong>{ADMIN_AUTHORIZED_EMAIL}</strong> | Master Passcode: <strong>{ADMIN_MASTER_PASSCODE}</strong>
-                  </p>
-                </div>
               </div>
             )}
           </div>

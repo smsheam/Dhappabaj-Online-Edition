@@ -1,16 +1,14 @@
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch, Timestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { cleanupRoomSubcollections } from './multiplayerService';
 import { WordItem, CategoryId } from '../types/game';
 import { ALL_WORDS } from '../data/words';
 import { OnlineRoomData, OnlinePlayer } from '../types/multiplayer';
 
 export const ADMIN_AUTHORIZED_EMAIL = 'smsheam1@gmail.com';
-export const ADMIN_MASTER_PASSCODE = 'dhappabaj2026';
 
 const CUSTOM_WORDS_STORAGE_KEY = 'dhappabaj_custom_words_v1';
-const QUICK_CHATS_STORAGE_KEY = 'dhappabaj_custom_quick_chats_v1';
 const SYSTEM_LOGS_STORAGE_KEY = 'dhappabaj_system_logs_v1';
-const ADMIN_AUTH_SESSION_KEY = 'dhappabaj_admin_session_auth';
 
 export interface SystemLogEntry {
   id: string;
@@ -20,71 +18,11 @@ export interface SystemLogEntry {
   details?: string;
 }
 
-export interface CustomQuickChats {
-  suspect: { bn: string; en: string }[];
-  defense: { bn: string; en: string }[];
-  fun: { bn: string; en: string }[];
-}
-
-export const DEFAULT_QUICK_CHATS: CustomQuickChats = {
-  suspect: [
-    { bn: '১০০% শিওর এইটাই ধাপ্পাবাজ! 🫵', en: 'You are 100% the imposter! 🫵' },
-    { bn: 'ক্লুটা তো পুরাই সন্দেহজনক! 🤔', en: 'That clue is super suspicious! 🤔' },
-    { bn: 'আমার দিকে তাকাচ্ছেন কেন?! 👀', en: 'Why are you looking at me?! 👀' },
-    { bn: 'ডাল মে কুচ কালা হ্যায়! 🍲', en: 'Something is fishy here! 🍲' },
-    { bn: 'ধরা খাইলে খবর আছে! 💀', en: 'When you get caught you are done! 💀' },
-    { bn: 'কথা কম, কাজ বেশি! 🤐', en: 'Less talk, confess now! 🤐' },
-    { bn: 'চোখের ভাষা বলে দিচ্ছে আপনি ধাপ্পাবাজ! 🕵️', en: 'Your eyes say you are the imposter! 🕵️' },
-    { bn: 'চোর চুরি করে পালানোর ধান্দায় আছে! 🏃‍♂️', en: 'Imposter is trying to sneak away! 🏃‍♂️' },
-  ],
-  defense: [
-    { bn: 'বিশ্বাস করেন আমি নিষ্পাপ পাবলিক! 😇', en: 'Trust me, I am an innocent citizen! 😇' },
-    { bn: 'আরে ধুর, আমি ১০০% নির্দোষ! 🛡️', en: 'Come on, I am 100% innocent! 🛡️' },
-    { bn: 'আমাকে ভোট দিলে পরে আফসোস করবেন! 🛑', en: "Don't vote me, you will regret it! 🛑" },
-    { bn: 'আমি কিন্তু একদম খাঁটি মানুষ! 💯', en: 'I am genuine and telling the truth! 💯' },
-    { bn: 'ভুল মানুষকে ভোট দিয়েন না! ⚠️', en: "Don't waste your vote on an innocent! ⚠️" },
-    { bn: 'আমার উপর ভরসা রাখেন! 🙏', en: 'Put your trust in me on this one! 🙏' },
-  ],
-  fun: [
-    { bn: 'ধাপ্পাবাজের হাত-পা কাঁপতেছে! 😂', en: 'The imposter is trembling right now! 😂' },
-    { bn: 'মিথ্যা কথা বলা মহাপাপ ভাই 🤫', en: 'Lying is a bad habit my friend 🤫' },
-    { bn: 'দেরি কেন? খেলা শুরু করো! 🚀', en: 'Why the wait? Make your choice! 🚀' },
-    { bn: 'চোর পালালে বুদ্ধি বাড়ে 🏃‍♂️', en: 'Regret comes after the imposter escapes! 🏃‍♂️' },
-    { bn: 'খেলা হবে চরম! 🔥', en: 'Game on! This round is pure fire! 🔥' },
-  ],
-};
-
-// Check if current user or session is admin
+// Admin access is based on Firebase Authentication identity, never a client-side passcode.
 export function isUserAdmin(): boolean {
   if (typeof window === 'undefined') return false;
-  // 1. Check logged-in Firebase user email
   const currentEmail = auth.currentUser?.email?.toLowerCase();
-  if (currentEmail && currentEmail === ADMIN_AUTHORIZED_EMAIL.toLowerCase()) {
-    return true;
-  }
-  // 2. Check session passcode unlock
-  try {
-    const isUnlocked = sessionStorage.getItem(ADMIN_AUTH_SESSION_KEY) === 'true';
-    if (isUnlocked) return true;
-  } catch {}
-  return false;
-}
-
-export function unlockAdminWithPasscode(passcode: string): boolean {
-  const clean = passcode.trim();
-  if (clean === ADMIN_MASTER_PASSCODE || clean === 'sheam123') {
-    try {
-      sessionStorage.setItem(ADMIN_AUTH_SESSION_KEY, 'true');
-    } catch {}
-    return true;
-  }
-  return false;
-}
-
-export function lockAdminSession() {
-  try {
-    sessionStorage.removeItem(ADMIN_AUTH_SESSION_KEY);
-  } catch {}
+  return Boolean(currentEmail && currentEmail === ADMIN_AUTHORIZED_EMAIL.toLowerCase());
 }
 
 // Custom words management
@@ -153,24 +91,6 @@ export function getCombinedWordPool(): WordItem[] {
   return [...customWords, ...ALL_WORDS];
 }
 
-// Quick Chats management
-export function getCustomQuickChats(): CustomQuickChats {
-  try {
-    const raw = localStorage.getItem(QUICK_CHATS_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed.suspect && parsed.defense && parsed.fun) return parsed;
-    }
-  } catch {}
-  return DEFAULT_QUICK_CHATS;
-}
-
-export function saveCustomQuickChats(chats: CustomQuickChats) {
-  try {
-    localStorage.setItem(QUICK_CHATS_STORAGE_KEY, JSON.stringify(chats));
-  } catch {}
-}
-
 // System logging for admin monitoring
 export function logSystemEvent(level: 'info' | 'warn' | 'error', message: string, details?: string) {
   try {
@@ -225,6 +145,7 @@ export async function closeRoomByAdmin(roomCode: string): Promise<void> {
     closedReason: 'closed_by_admin',
     updatedAt: now,
     lastActivityAt: now,
+    expiresAt: Timestamp.fromMillis(now + 24 * 60 * 60 * 1000),
   });
   logSystemEvent('info', `Admin closed room ${roomCode}`);
 }
@@ -232,6 +153,7 @@ export async function closeRoomByAdmin(roomCode: string): Promise<void> {
 // Delete room completely
 export async function deleteRoomByAdmin(roomCode: string): Promise<void> {
   const roomRef = doc(db, 'rooms', roomCode);
+  await cleanupRoomSubcollections(roomCode);
   await deleteDoc(roomRef);
   logSystemEvent('info', `Admin deleted room ${roomCode}`);
 }

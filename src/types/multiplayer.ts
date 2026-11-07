@@ -107,6 +107,7 @@ export interface OnlineRoomData {
   updatedAt: number;
   lastActivityAt: number; // 5 min inactivity tracking
   hostDisconnectedAt?: number | null; // 30s grace period for host disconnect
+  expiresAt?: unknown; // Firestore TTL timestamp for closed-room document cleanup
 }
 
 export interface OnlineVote {
@@ -114,17 +115,4 @@ export interface OnlineVote {
   suspectId: string;
   suspectIds?: string[]; // Multiple votes supported when 2 imposters
   timestamp: number;
-}
-
-export interface ChatMessage {
-  id: string;
-  senderId: string;
-  senderName: string;
-  senderAvatar: string;
-  senderColor?: string;
-  text: string;
-  timestamp: number;
-  isVoice?: boolean;
-  audioData?: string;
-  durationMs?: number;
 }

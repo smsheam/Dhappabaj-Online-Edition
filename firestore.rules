@@ -1,139 +1,269 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Global safety net - default deny
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
 
     function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    function isRoomHost(roomId) {
-      return isSignedIn() && exists(/databases/$(database)/documents/rooms/$(roomId)) &&
-        get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId == request.auth.uid;
+      return id is string && id.size() > 0 && id.size() <= 128 &&
+        id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
     function isAdmin() {
       return isSignedIn() && (
-        (request.auth.token.email != null && (
-          request.auth.token.email.lower() == 'smsheam1@gmail.com' ||
-          request.auth.token.email.lower() == 's m sheam1@gmail.com'
-        )) ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        exists(/databases/$(database)/documents/roles/$(request.auth.uid))
+        (request.auth.token.email != null &&
+          request.auth.token.email.lower() == 'smsheam1@gmail.com') ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
 
-    // Dynamic game configuration (Custom words, Quick chats, Scoring rules, Game texts)
+    function isRoomHost(roomId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/rooms/$(roomId)) &&
+        get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId == request.auth.uid;
+    }
+
+    function isRoomMember(roomId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/rooms/$(roomId)/players/$(request.auth.uid));
+    }
+
+    function isRoomMemberAfter(roomId) {
+      return isSignedIn() &&
+        existsAfter(/databases/$(database)/documents/rooms/$(roomId)/players/$(request.auth.uid));
+    }
+
+    function isRoomClosed(roomId) {
+      return exists(/databases/$(database)/documents/rooms/$(roomId)) &&
+        get(/databases/$(database)/documents/rooms/$(roomId)).data.status in ['CLOSED', 'EXPIRED'];
+    }
+
+    function isAssignedImposter(roomId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/rooms/$(roomId)/private/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/rooms/$(roomId)/private/$(request.auth.uid)).data.role == 'imposter';
+    }
+
+    function roomIdentityIsUnchanged() {
+      return request.resource.data.hostId == resource.data.hostId &&
+        request.resource.data.hostSessionToken == resource.data.hostSessionToken &&
+        request.resource.data.roomCode == resource.data.roomCode &&
+        request.resource.data.createdAt == resource.data.createdAt;
+    }
+
     match /game_config/{document=**} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isAdmin();
     }
 
-    // Health ping
     match /system_health/{document=**} {
-      allow read, write: if isSignedIn();
+      allow get: if isSignedIn();
+      allow list, write: if isAdmin();
     }
 
-    // Registered and Guest Player Profiles
     match /users/{userId} {
-      allow get, list: if isSignedIn();
-      allow create, update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId &&
+        request.resource.data.uid == userId &&
+        !('isBanned' in request.resource.data) &&
+        !('bannedReason' in request.resource.data);
+      allow update: if isAdmin() ||
+        (
+          isSignedIn() &&
+          request.auth.uid == userId &&
+          request.resource.data.uid == userId &&
+          request.resource.data.createdAt == resource.data.createdAt &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'email', 'displayName', 'username', 'photoURL', 'bio', 'accountType',
+            'updatedAt', 'hasCompletedOnboarding', 'customization', 'stats',
+            'unlockedBadges'
+          ])
+        );
       allow delete: if isAdmin();
     }
 
-    // Role & Permissions records (Owner and Editors)
-    match /roles/{userId} {
-      allow get, list: if isSignedIn();
-      allow write: if isAdmin();
+    match /roles/{roleId} {
+      allow get: if isAdmin() ||
+        (
+          isSignedIn() &&
+          request.auth.token.email != null &&
+          resource.data.email is string &&
+          resource.data.email.lower() == request.auth.token.email.lower()
+        );
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
-    // Admin records
     match /admins/{adminId} {
-      allow get, list: if isSignedIn();
-      allow write: if isAdmin();
+      allow get, list, write: if isAdmin();
     }
 
-    // Completed Match History records
     match /match_history/{matchId} {
-      allow get, list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update, delete: if isAdmin();
+      allow get, list: if isAdmin();
+      allow create, update: if isAdmin() ||
+        (isSignedIn() && request.resource.data.roomCode is string &&
+          isRoomHost(request.resource.data.roomCode));
+      allow delete: if isAdmin();
     }
 
-    // Room collection
     match /rooms/{roomId} {
       allow get: if isSignedIn() && isValidId(roomId);
-      allow list: if isSignedIn();
+      allow list: if isAdmin();
 
-      // Create room: user sets themselves as host
       allow create: if isSignedIn() && isValidId(roomId) &&
+        request.resource.data.roomCode == roomId &&
         request.resource.data.hostId == request.auth.uid;
 
-      // Update room: host can update any room state, or players can update phase/round state when permitted
-      allow update: if isSignedIn() && isValidId(roomId);
+      allow update: if isSignedIn() && isValidId(roomId) && roomIdentityIsUnchanged() && (
+        isRoomHost(roomId) || isAdmin() ||
+        (
+          isSignedIn() &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'closedReason', 'updatedAt', 'expiresAt']) &&
+          request.resource.data.expiresAt is timestamp &&
+          request.resource.data.expiresAt > request.time &&
+          (
+            (
+              resource.data.status == 'PLAYING' &&
+              resource.data.hostDisconnectedAt is number &&
+              request.time.toMillis() - resource.data.hostDisconnectedAt > 60000
+            ) ||
+            (
+              resource.data.lastActivityAt is number &&
+              request.time.toMillis() - resource.data.lastActivityAt >
+                (resource.data.status == 'PLAYING' ? 600000 : 900000)
+            )
+          ) &&
+          request.resource.data.status in ['CLOSED', 'EXPIRED']
+        ) ||
+        (
+          (isRoomMember(roomId) || isRoomMemberAfter(roomId)) && (
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['playerCount', 'lastActivityAt', 'updatedAt']) ||
+            (
+              resource.data.currentPhase == 'CLUE' &&
+              request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['clueTurnIndex', 'clueTurnPlayerId', 'phaseEndsAt',
+                  'currentPhase', 'lastActivityAt', 'updatedAt']) &&
+              (
+                (
+                  resource.data.clueTurnPlayerId == request.auth.uid &&
+                  request.resource.data.clueTurnIndex == resource.data.clueTurnIndex + 1 &&
+                  request.resource.data.currentPhase == 'CLUE' &&
+                  (
+                    (
+                      request.resource.data.clueTurnIndex < resource.data.clueOrder.size() &&
+                      request.resource.data.clueTurnPlayerId == resource.data.clueOrder[request.resource.data.clueTurnIndex]
+                    ) ||
+                    (
+                      request.resource.data.clueTurnIndex == resource.data.clueOrder.size() &&
+                      request.resource.data.clueTurnPlayerId == null
+                    )
+                  )
+                ) ||
+                (
+                  resource.data.clueTurnPlayerId == null &&
+                  resource.data.clueTurnIndex >= resource.data.clueOrder.size() &&
+                  request.resource.data.clueTurnIndex == resource.data.clueTurnIndex &&
+                  request.resource.data.currentPhase == 'DISCUSSION'
+                )
+              )
+            ) ||
 
-      // Delete room: host or super admin
+            (
+              resource.data.currentPhase == 'IMPOSTER_GUESS' &&
+              isAssignedImposter(roomId) &&
+              request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['currentPhase', 'imposterGuessedWord', 'imposterGuessAnswer',
+                  'winner', 'scoreDetails', 'phaseEndsAt', 'lastActivityAt', 'updatedAt'])
+            ) ||
+
+            (
+              request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['nextRoundConfirmed', 'lastActivityAt', 'updatedAt']) &&
+              request.resource.data.nextRoundConfirmed is list &&
+              request.resource.data.nextRoundConfirmed.hasAll(resource.data.nextRoundConfirmed) &&
+              request.resource.data.nextRoundConfirmed.size() == resource.data.nextRoundConfirmed.size() + 1 &&
+              request.resource.data.nextRoundConfirmed.hasAny([request.auth.uid])
+            ) ||
+
+            (
+              request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['status', 'closedReason', 'playerCount', 'updatedAt', 'expiresAt']) &&
+              request.resource.data.status == 'CLOSED' &&
+              request.resource.data.closedReason == 'empty_room' &&
+              request.resource.data.expiresAt is timestamp &&
+              request.resource.data.expiresAt > request.time &&
+              resource.data.playerCount <= 1 &&
+              request.resource.data.playerCount == 0
+            )
+          )
+        )
+      );
+
       allow delete: if isRoomHost(roomId) || isAdmin();
 
-      // Players subcollection
       match /players/{playerId} {
         allow get: if isSignedIn() && isValidId(roomId) && isValidId(playerId);
         allow list: if isSignedIn() && isValidId(roomId);
 
-        // Player joins as themselves
         allow create: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
-          request.auth.uid == playerId;
+          request.auth.uid == playerId &&
+          request.resource.data.id == playerId;
 
-        // Player updates their own status/name/ready/clue/hasSeenCard, or host updates scores
-        allow update: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
-          (request.auth.uid == playerId || isRoomHost(roomId) || isAdmin());
+        allow update: if isSignedIn() && isValidId(roomId) && isValidId(playerId) && (
+          isRoomHost(roomId) || isAdmin() ||
+          (
+            get(/databases/$(database)/documents/rooms/$(roomId)).data.currentPhase == 'IMPOSTER_GUESS' &&
+            isAssignedImposter(roomId) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['score'])
+          ) ||
+          (
+            request.auth.uid == playerId &&
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['name', 'avatar', 'isReady', 'hasVoted', 'hasSeenCard',
+                'clue', 'connectionStatus', 'lastSeenAt', 'disconnectedAt',
+                'canRejoinUntil', 'sessionToken'])
+          )
+        );
 
-        // Player can leave, or host can kick
         allow delete: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
-          (request.auth.uid == playerId || isRoomHost(roomId) || isAdmin());
+          (request.auth.uid == playerId || isRoomHost(roomId) || isAdmin() || isRoomClosed(roomId));
       }
 
-      // Private role and word subcollection (strictly guarded)
       match /private/{playerId} {
-        // CRITICAL: Only the assigned player can read their own secret role, word and hint!
         allow get: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
           request.auth.uid == playerId;
-        allow list: if false;
-
-        // Writing role assignments is done by the host when round starts
-        allow create, update: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
-          (isRoomHost(roomId) || request.auth.uid == playerId);
-        allow delete: if isRoomHost(roomId) || isAdmin();
+        allow list: if isRoomHost(roomId) || isAdmin() || isRoomClosed(roomId);
+        allow create, update: if isRoomHost(roomId) || isAdmin();
+        allow delete: if isRoomHost(roomId) || isAdmin() || isRoomClosed(roomId);
       }
 
-      // Votes subcollection
       match /votes/{playerId} {
-        allow get: if isSignedIn() && isValidId(roomId) && isValidId(playerId);
-        allow list: if isSignedIn() && isValidId(roomId);
+        allow get: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
+          (isRoomMember(roomId) || isRoomHost(roomId) || isAdmin() || isRoomClosed(roomId));
+        allow list: if isRoomMember(roomId) || isRoomHost(roomId) || isAdmin() || isRoomClosed(roomId);
 
-        // Only the voter can cast or update their own vote
-        allow create, update: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
-          request.auth.uid == playerId;
-        allow delete: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
-          (request.auth.uid == playerId || isRoomHost(roomId) || isAdmin());
+        allow create, update: if isSignedIn() && isValidId(roomId) &&
+          isValidId(playerId) && request.auth.uid == playerId &&
+          isRoomMember(roomId) &&
+          request.resource.data.voterId == request.auth.uid;
+        allow delete: if isRoomHost(roomId) || isAdmin() || isRoomClosed(roomId);
       }
 
-      // Live discussion messages subcollection
+      // Legacy lobby chat documents can only be read and deleted during cleanup.
       match /messages/{messageId} {
-        allow get: if isSignedIn() && isValidId(roomId) && isValidId(messageId);
-        allow list: if isSignedIn() && isValidId(roomId);
-        allow create: if isSignedIn() && isValidId(roomId) && isValidId(messageId) &&
-          request.resource.data.senderId == request.auth.uid;
-        allow update, delete: if isRoomHost(roomId) || isAdmin();
+        allow get, list: if isRoomHost(roomId) || isAdmin() || isRoomClosed(roomId);
+        allow delete: if isRoomHost(roomId) || isAdmin() || isRoomClosed(roomId);
       }
+
+      // Lobby chat was removed. Legacy messages are inaccessible and are purged during room cleanup.
     }
   }
 }
