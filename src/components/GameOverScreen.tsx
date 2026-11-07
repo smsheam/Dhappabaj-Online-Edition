@@ -7,6 +7,7 @@ import { PlayerAvatar } from './PlayerAvatar';
 import { sound } from '../utils/audio';
 import { calculateFunnyAwards, MatchContextStats } from '../utils/funnyAwards';
 import { FunnyAwardsSection } from './FunnyAwardsSection';
+import { ScoreboardShareCard } from './scoreboard/ScoreboardShareCard';
 
 interface GameOverScreenProps {
   players: Player[];
@@ -233,6 +234,27 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({
 
         {/* Humorous Special Awards */}
         <FunnyAwardsSection awards={awards} lang={lang} />
+
+        {/* Download & Social Media Share Scoreboard */}
+        {winner && (
+          <ScoreboardShareCard
+            champion={{
+              id: winner.id,
+              name: winner.name,
+              avatar: winner.avatar || '🕵️',
+              score: winner.score,
+            }}
+            players={players.map((p) => ({
+              id: p.id,
+              name: p.name,
+              avatar: p.avatar || '🕵️',
+              score: p.score,
+            }))}
+            matchMode="Pass & Play"
+            totalRounds={roundResults.length}
+            lang={lang}
+          />
+        )}
       </div>
 
       {/* Action Buttons */}

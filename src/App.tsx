@@ -21,15 +21,13 @@ import { OnlineJoinCreateModal } from './components/online/OnlineJoinCreateModal
 import { OnlineGameContainer } from './components/online/OnlineGameContainer';
 import { AdminDashboardModal } from './components/admin/AdminDashboardModal';
 import { ProfileModal } from './components/profile/ProfileModal';
-import { AchievementsModal } from './components/achievements/AchievementsModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AuthPromptModal } from './components/auth/AuthPromptModal';
-import { OnboardingModal } from './components/profile/OnboardingModal';
 import { UserProfile } from './types/user';
 import {
   getUserProfile,
+  loginAsGuest,
   subscribeToUserProfile,
-  updateProfileCustomization,
   signOutUser,
   createDefaultProfile,
   saveUserProfile,
@@ -100,15 +98,13 @@ export default function App() {
   const [isRulesOpen, setIsRulesOpen] = useState<boolean>(false);
   const [isAdminOpen, setIsAdminOpen] = useState<boolean>(false);
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
-  const [isAchievementsOpen, setIsAchievementsOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
-  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(sound.getMuted());
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [canAccessAdmin, setCanAccessAdmin] = useState<boolean>(false);
 
-  // Initialize player profile & check admin permissions with Firebase Auth
+  // Initialize player profile silently & check admin permissions with Firebase Auth
   useEffect(() => {
     let unsubProfile: (() => void) | null = null;
 
@@ -129,9 +125,20 @@ export default function App() {
       }
 
       if (!user) {
-        setUserProfile(null);
-        setCanAccessAdmin(false);
-        setIsAuthModalOpen(true);
+        // Silently initialize guest session without showing any popup modal at startup
+        try {
+          const guestProfile = await loginAsGuest();
+          setUserProfile(guestProfile);
+          checkAdmin(guestProfile);
+          unsubProfile = subscribeToUserProfile(guestProfile.uid, (updated) => {
+            if (updated) {
+              setUserProfile(updated);
+              checkAdmin(updated);
+            }
+          });
+        } catch (err) {
+          console.warn('Silent guest login note:', err);
+        }
         return;
       }
 
@@ -150,10 +157,6 @@ export default function App() {
 
         setUserProfile(profile);
         checkAdmin(profile);
-
-        if (!profile.hasCompletedOnboarding) {
-          setIsOnboardingOpen(true);
-        }
 
         unsubProfile = subscribeToUserProfile(user.uid, (updated) => {
           if (updated) {
@@ -176,9 +179,10 @@ export default function App() {
     sound.playClick();
     setIsProfileOpen(false);
     await signOutUser();
-    setUserProfile(null);
+    // Return to guest mode seamlessly on home screen
+    const guestProfile = await loginAsGuest();
+    setUserProfile(guestProfile);
     setCanAccessAdmin(false);
-    setIsAuthModalOpen(true);
   };
 
   // Apply theme to document
@@ -408,7 +412,7 @@ export default function App() {
         theme={theme}
       />
 
-      {/* Auth Prompt Modal */}
+      {/* Auth Prompt Modal (only when user clicks Sign In) */}
       <AuthPromptModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
@@ -416,39 +420,6 @@ export default function App() {
         onAuthenticated={(prof) => {
           setUserProfile(prof);
           setIsAuthModalOpen(false);
-          if (!prof.hasCompletedOnboarding) {
-            setIsOnboardingOpen(true);
-          }
-        }}
-        lang={lang}
-        theme={theme}
-      />
-
-      {/* First-time Onboarding Modal */}
-      {userProfile && (
-        <OnboardingModal
-          isOpen={isOnboardingOpen}
-          userProfile={userProfile}
-          onComplete={(updated) => {
-            setUserProfile(updated);
-            setIsOnboardingOpen(false);
-          }}
-          lang={lang}
-          theme={theme}
-        />
-      )}
-
-      {/* Achievements & Missions Modal */}
-      <AchievementsModal
-        isOpen={isAchievementsOpen}
-        onClose={() => setIsAchievementsOpen(false)}
-        userProfile={userProfile}
-        onEquipBadge={(badgeKey) => {
-          if (userProfile) {
-            updateProfileCustomization(userProfile.uid, { skinBadge: badgeKey }).then((p) => {
-              if (p) setUserProfile(p);
-            });
-          }
         }}
         lang={lang}
         theme={theme}
@@ -494,7 +465,6 @@ export default function App() {
             <IntroScreen
               onStartPassAndPlay={handleIntroStart}
               onOpenOnlineRoom={() => setIsOnlineModalOpen(true)}
-              onOpenAchievements={() => setIsAchievementsOpen(true)}
               onOpenProfile={() => setIsProfileOpen(true)}
               onOpenSettings={() => setIsSettingsOpen(true)}
               onOpenAdmin={() => setIsAdminOpen(true)}

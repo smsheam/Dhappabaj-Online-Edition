@@ -23,7 +23,6 @@ import { sound } from '../utils/audio';
 interface IntroScreenProps {
   onStartPassAndPlay: () => void;
   onOpenOnlineRoom: () => void;
-  onOpenAchievements: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
   onOpenAdmin: () => void;
@@ -43,7 +42,6 @@ interface IntroScreenProps {
 export const IntroScreen: React.FC<IntroScreenProps> = ({
   onStartPassAndPlay,
   onOpenOnlineRoom,
-  onOpenAchievements,
   onOpenProfile,
   onOpenSettings,
   onOpenAdmin,
@@ -240,52 +238,30 @@ export const IntroScreen: React.FC<IntroScreenProps> = ({
           <div className="text-base font-bold text-slate-400">→</div>
         </button>
 
-        {/* Grid for Achievements & Customize Profile */}
-        <div className="grid grid-cols-2 gap-2.5">
-          {/* 3. Achievements (২০টি পুরস্কার) */}
-          <button
-            type="button"
-            onClick={() => {
-              sound.playClick();
-              onOpenAchievements();
-            }}
-            className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-500/40 text-slate-900 dark:text-white shadow-xs flex items-center gap-3 cursor-pointer transition-all hover:-translate-y-0.5 text-left"
-          >
-            <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0 text-lg">
-              <Award className="w-5 h-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h4 className="text-xs sm:text-sm font-bold truncate">
-                {isEn ? 'Achievements' : 'অর্জন ও মিশন'}
-              </h4>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                {isEn ? '20 Badges' : '২০টি খেতাব'}
-              </p>
-            </div>
-          </button>
-
-          {/* 4. Customize Profile */}
-          <button
-            type="button"
-            onClick={() => {
-              sound.playClick();
-              onOpenProfile();
-            }}
-            className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-500/40 text-slate-900 dark:text-white shadow-xs flex items-center gap-3 cursor-pointer transition-all hover:-translate-y-0.5 text-left"
-          >
-            <div className="w-9 h-9 rounded-xl bg-purple-500/15 text-purple-500 flex items-center justify-center shrink-0">
+        {/* 3. Customize Profile (Name & Avatar only) */}
+        <button
+          type="button"
+          onClick={() => {
+            sound.playClick();
+            onOpenProfile();
+          }}
+          className="w-full p-3.5 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 hover:border-amber-500/50 text-slate-900 dark:text-white shadow-xs flex items-center justify-between gap-3 transition-all hover:-translate-y-0.5 active:translate-y-0 cursor-pointer text-left"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
               <Palette className="w-5 h-5" />
             </div>
-            <div className="min-w-0 flex-1">
-              <h4 className="text-xs sm:text-sm font-bold truncate">
-                {isEn ? 'Customize' : 'প্রোফাইল সাজান'}
-              </h4>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                {isEn ? 'Avatar & Skins' : 'অ্যাভাটার ও স্কিন'}
+            <div>
+              <div className="font-bold text-sm sm:text-base">
+                {isEn ? 'Customize Profile' : 'প্রোফাইল সাজান'}
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {isEn ? 'Change player name & avatar' : 'খেলোয়াড়ের নাম ও অ্যাভাটার পরিবর্তন'}
               </p>
             </div>
-          </button>
-        </div>
+          </div>
+          <div className="text-base font-bold text-slate-400">→</div>
+        </button>
 
         {/* Row for Settings & Exit */}
         <div className="grid grid-cols-2 gap-2.5">

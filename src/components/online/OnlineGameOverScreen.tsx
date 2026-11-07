@@ -7,6 +7,7 @@ import { setOnlineRoomPhase } from '../../services/multiplayerService';
 import { sound } from '../../utils/audio';
 import { calculateFunnyAwards, MatchContextStats } from '../../utils/funnyAwards';
 import { FunnyAwardsSection } from '../FunnyAwardsSection';
+import { ScoreboardShareCard } from '../scoreboard/ScoreboardShareCard';
 import { saveCompletedMatch } from '../../services/matchHistoryService';
 import { recordPlayerMatchStats } from '../../services/userService';
 
@@ -246,6 +247,27 @@ export const OnlineGameOverScreen: React.FC<OnlineGameOverScreenProps> = ({
 
         {/* Humorous Special Awards */}
         <FunnyAwardsSection awards={awards} lang={lang} />
+
+        {/* Download & Social Media Share Scoreboard */}
+        {champion && (
+          <ScoreboardShareCard
+            champion={{
+              id: champion.id,
+              name: champion.name,
+              avatar: champion.avatar || '🕵️',
+              score: champion.score || 0,
+            }}
+            players={players.map((p) => ({
+              id: p.id,
+              name: p.name,
+              avatar: p.avatar || '🕵️',
+              score: p.score || 0,
+            }))}
+            matchMode="Online Multiplayer"
+            totalRounds={room.totalRounds || 5}
+            lang={lang}
+          />
+        )}
       </div>
 
       {/* Footer */}

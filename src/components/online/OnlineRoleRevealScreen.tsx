@@ -273,15 +273,15 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
                   </div>
                 </div>
 
-                {/* AI-Driven Word Insight for Innocent Players */}
-                {aiDesc && (
-                  <div className="p-2.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-left space-y-1">
+                {/* AI-Driven Word Definition for Innocent Players */}
+                {aiDesc?.en && (
+                  <div className="p-3 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-left space-y-1">
                     <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-amber-400">
                       <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                      <span>{isEn ? 'AI Word Insight (Citizens Only):' : 'এআই শব্দ পরিচিতি (শুধুমাত্র নির্দোষদের জন্য):'}</span>
+                      <span>{isEn ? 'Definition & Working Method (Citizens Only):' : 'শব্দার্থ ও কাজের পদ্ধতি (শুধুমাত্র নির্দোষদের জন্য):'}</span>
                     </div>
                     <p className="text-xs text-amber-100 font-medium leading-relaxed">
-                      {isEn ? aiDesc.en : aiDesc.bn}
+                      {aiDesc.en}
                     </p>
                   </div>
                 )}

@@ -197,15 +197,15 @@ export const RoleCardScreen: React.FC<RoleCardScreenProps> = ({
                 </p>
               </div>
 
-              {/* AI-Driven Word Description for Innocent Citizens */}
-              {aiDesc && (
-                <div className="p-3 rounded-2xl bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 text-left space-y-1 mt-2">
+              {/* AI-Driven Word Definition for Innocent Citizens */}
+              {aiDesc?.en && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 text-left space-y-1 mt-2">
                   <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-700 dark:text-amber-400">
                     <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                    <span>{isEn ? 'AI Word Insight (Citizens Only):' : 'এআই শব্দ পরিচিতি (শুধুমাত্র নির্দোষদের জন্য):'}</span>
+                    <span>{isEn ? 'Definition & Working Method (Citizens Only):' : 'শব্দার্থ ও কাজের পদ্ধতি (শুধুমাত্র নির্দোষদের জন্য):'}</span>
                   </div>
                   <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-medium">
-                    {isEn ? aiDesc.en : aiDesc.bn}
+                    {aiDesc.en}
                   </p>
                 </div>
               )}

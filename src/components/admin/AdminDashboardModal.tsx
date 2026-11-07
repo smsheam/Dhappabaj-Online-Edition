@@ -117,7 +117,7 @@ const CATEGORY_LABELS: Record<string, { bn: string; en: string }> = {
   landmarks: { bn: 'স্থাপত্য ও ভাস্কর্য', en: 'Landmarks' },
 };
 
-type AdminTab = 'overview' | 'words' | 'content' | 'scoring' | 'rooms_players' | 'firebase' | 'instructions';
+type AdminTab = 'overview' | 'words' | 'rooms_players' | 'firebase';
 
 export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   isOpen,
@@ -658,11 +658,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               {[
                 { id: 'overview', icon: <TrendingUp className="w-3.5 h-3.5" />, bn: 'ওভারভিউ', en: 'Overview' },
                 { id: 'words', icon: <BookOpen className="w-3.5 h-3.5" />, bn: 'শব্দ ও ইঙ্গিত', en: 'Words & Hints' },
-                { id: 'content', icon: <MessageSquare className="w-3.5 h-3.5" />, bn: 'কন্টেন্ট ও টেক্সট', en: 'Content' },
-                { id: 'scoring', icon: <Sliders className="w-3.5 h-3.5" />, bn: 'স্কোরিং নিয়ম', en: 'Scoring Rules' },
-                { id: 'rooms_players', icon: <Users className="w-3.5 h-3.5" />, bn: 'রুম, ইউজার ও রোল', en: 'Moderation' },
-                { id: 'firebase', icon: <Database className="w-3.5 h-3.5" />, bn: 'ফায়ারবেস সিস্টেম', en: 'Firebase Info' },
-                { id: 'instructions', icon: <FileText className="w-3.5 h-3.5" />, bn: 'নির্দেশিকা', en: 'Help' },
+                { id: 'rooms_players', icon: <Users className="w-3.5 h-3.5" />, bn: 'লাইভ রুম ও মডারেশন', en: 'Live Rooms & Players' },
+                { id: 'firebase', icon: <Database className="w-3.5 h-3.5" />, bn: 'সিস্টেম স্ট্যাটাস', en: 'System & Database' },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -1078,76 +1075,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               </div>
             )}
 
-            {/* TAB 3: CONTENT & QUICK CHATS */}
-            {activeTab === 'content' && (
-              <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-5">
-                {/* Add Quick Chat Form */}
-                <form onSubmit={handleAddChat} className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                    {isEn ? 'Add New Quick Chat Message' : 'নতুন কুইক চ্যাট যোগ করুন'}
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <select
-                      value={chatCategory}
-                      onChange={(e) => setChatCategory(e.target.value as any)}
-                      className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border text-xs font-bold"
-                    >
-                      <option value="suspect">{isEn ? 'Suspicion' : 'সন্দেহ'}</option>
-                      <option value="defense">{isEn ? 'Defense' : 'আত্মরক্ষা'}</option>
-                      <option value="fun">{isEn ? 'Fun & Taunt' : 'মজার ডায়লগ'}</option>
-                    </select>
-                    <input
-                      type="text"
-                      placeholder="বাংলা মেসেজ"
-                      value={newChatBn}
-                      onChange={(e) => setNewChatBn(e.target.value)}
-                      required
-                      className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border text-xs font-bold"
-                    />
-                    <input
-                      type="text"
-                      placeholder="English Translation (optional)"
-                      value={newChatEn}
-                      onChange={(e) => setNewChatEn(e.target.value)}
-                      className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border text-xs"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="py-2 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs cursor-pointer"
-                  >
-                    {isEn ? 'Save Quick Chat' : 'চ্যাট ডায়লগ যোগ করুন'}
-                  </button>
-                </form>
 
-                {/* Quick Chats Lists */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {(['suspect', 'defense', 'fun'] as const).map((cat) => (
-                    <div key={cat} className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
-                      <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
-                        <span className="text-xs font-black uppercase text-amber-500">
-                          {cat === 'suspect' ? 'সন্দেহজনক' : cat === 'defense' ? 'আত্মরক্ষা' : 'মজার'} ({quickChats[cat].length})
-                        </span>
-                      </div>
-                      <div className="space-y-1.5 max-h-60 overflow-y-auto">
-                        {quickChats[cat].map((item, idx) => (
-                          <div key={idx} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950 text-xs flex justify-between items-center gap-2">
-                            <span className="truncate">{item.bn}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteChat(cat, idx)}
-                              className="text-slate-400 hover:text-rose-500 cursor-pointer"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* TAB 4: SCORING MANAGEMENT */}
             {activeTab === 'scoring' && (

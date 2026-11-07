@@ -1,47 +1,50 @@
 import { GoogleGenAI } from '@google/genai';
-import { WordItem, Language } from '../types/game';
+import { WordItem } from '../types/game';
 
-const CACHE_PREFIX = 'dhappabaj_ai_desc_v1_';
+const CACHE_PREFIX = 'dhappabaj_ai_definition_v2_';
 
 export interface AiWordDescription {
-  bn: string;
   en: string;
+  bn?: string;
 }
 
-// Fallback smart descriptions when offline or before AI resolves
-function generateFallbackDescription(word: WordItem): AiWordDescription {
+// Fallback real-world dictionary definitions and working methods by category
+function generateFallbackDefinition(word: WordItem): AiWordDescription {
   const cat = word.category;
-  const wordBn = word.wordBn;
-  const wordEn = word.wordEn;
+  const wordEn = word.wordEn || word.wordBn;
 
-  let descBn = `"${wordBn}" হলো ${cat} ক্যাটাগরির একটি সুপরিচিত বিষয়। এটি সম্পর্কে সংকেত দেওয়ার সময় এর ব্যবহার, বৈশিষ্ট্য বা অনুভূতির ওপর জোর দিন।`;
-  let descEn = `"${wordEn}" is a well-known item in the ${cat} category. When giving your clue, focus on its function, daily appearance, or unique traits.`;
+  let def = `${wordEn} is a distinct entity categorized under ${cat}, defined by its real-world function, characteristics, and practical role.`;
 
   if (cat === 'food') {
-    descBn = `"${wordBn}" একটি জনপ্রিয় খাবার বা পানীয়। এটি কীভাবে রান্না করা হয়, এর স্বাদ কেমন বা কখন খাওয়া হয় তা নিয়ে চতুর ক্লু দিন।`;
-    descEn = `"${wordEn}" is a popular food or beverage item. Think about its distinctive taste, preparation, or dining occasions when dropping your clue.`;
+    def = `${wordEn} is a nutritious substance consumed by living organisms to sustain growth, energy, and vital functions, prepared through culinary methods like cooking, boiling, or baking.`;
   } else if (cat === 'animal') {
-    descBn = `"${wordBn}" একটি পরিচিত প্রাণী বা জীব। এর শারীরিক বৈশিষ্ট্য, স্বভাব, ডাক বা প্রাকৃতিক আবাসস্থল মাথায় রেখে ইঙ্গিত দিন।`;
-    descEn = `"${wordEn}" is a living creature or animal. Think of its natural habitat, movement, behavior, or sound to form your clue.`;
+    def = `${wordEn} is a living multicellular organism that feeds on organic matter, breathes oxygen, possesses sensory organs, and interacts with its ecosystem through instinctual behaviors.`;
   } else if (cat === 'people' || cat === 'professions') {
-    descBn = `"${wordBn}" একটি সুনির্দিষ্ট পেশা বা ব্যক্তিত্বের ধরণ। তারা সমাজে কী ভূমিকা পালন করেন বা কী পোশাক/সরঞ্জাম ব্যবহার করেন তা নিয়ে বলুন।`;
-    descEn = `"${wordEn}" represents a profession or character role. Reflect on their tools, workplace, or responsibilities when crafting your clue.`;
+    def = `${wordEn} is a profession or recognized individual role specialized in executing specific tasks, applying professional training, and fulfilling socio-economic responsibilities.`;
   } else if (cat === 'tech') {
-    descBn = `"${wordBn}" একটি আধুনিক প্রযুক্তি বা ইলেকট্রনিক্স সরঞ্জাম। এটি আমরা যোগাযোগের বা কাজের কী কাজে ব্যবহার করি তা স্মরণ করুন।`;
-    descEn = `"${wordEn}" is a tech device, software, or digital concept. Consider its everyday utility and how people interact with it.`;
+    def = `${wordEn} is an electronic apparatus or digital software system operating via microprocessors, algorithmic logic, or networked electrical circuitry to process information and execute commands.`;
   } else if (cat === 'bd_tourist' || cat === 'historical_places' || cat === 'landmarks' || cat === 'geography') {
-    descBn = `"${wordBn}" একটি দর্শনীয় ভৌগোলিক স্থান বা ঐতিহাসিক নিদর্শন। এর বিশেষত্ব ও গুরুত্ব নিয়ে পরোক্ষ সংকেত দিন।`;
-    descEn = `"${wordEn}" is a notable geographic spot, attraction, or landmark. Give subtle hints regarding its atmosphere and significance.`;
+    def = `${wordEn} is a geographically recognized location or historical architectural monument characterized by distinct cultural heritage, topographical features, or public significance.`;
+  } else if (cat === 'sports') {
+    def = `${wordEn} is a physical activity or regulated competitive game governed by formalized rules, requiring athletic skills, strategic teamwork, or individual physical exertion.`;
+  } else if (cat === 'science') {
+    def = `${wordEn} is a scientific principle, phenomenon, or natural entity investigated through empirical observation, reproducible testing, and systematic natural laws.`;
+  } else if (cat === 'transport') {
+    def = `${wordEn} is a mechanical conveyance or vehicle engineered to transport passengers and freight across designated transit routes using motorized or kinetic propulsion.`;
+  } else if (cat === 'clothing') {
+    def = `${wordEn} is an item of apparel or textile wear manufactured to protect, cover, insulate, or adorn the human body in diverse climatic and social settings.`;
+  } else if (cat === 'object') {
+    def = `${wordEn} is a physical artifact or utilitarian instrument constructed from material components to perform designated mechanical, domestic, or industrial operations.`;
   }
 
-  return { bn: descBn, en: descEn };
+  return { en: def };
 }
 
-// Global in-memory cache to prevent redundant fetches within current browser session
+// Global in-memory cache to prevent redundant fetches
 const inMemoryCache = new Map<number, AiWordDescription>();
 
 export async function getAiWordDescription(word: WordItem): Promise<AiWordDescription> {
-  const fallback = generateFallbackDescription(word);
+  const fallback = generateFallbackDefinition(word);
 
   if (inMemoryCache.has(word.id)) {
     return inMemoryCache.get(word.id)!;
@@ -52,12 +55,14 @@ export async function getAiWordDescription(word: WordItem): Promise<AiWordDescri
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
       const parsed = JSON.parse(cached) as AiWordDescription;
-      inMemoryCache.set(word.id, parsed);
-      return parsed;
+      if (parsed.en) {
+        inMemoryCache.set(word.id, parsed);
+        return parsed;
+      }
     }
   } catch {}
 
-  // Attempt live generation via Google GenAI SDK if API key is present
+  // Attempt live generation via Google GenAI SDK if API key is available
   const apiKey =
     (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) ||
     import.meta.env.VITE_GEMINI_API_KEY ||
@@ -69,26 +74,32 @@ export async function getAiWordDescription(word: WordItem): Promise<AiWordDescri
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
-    const prompt = `You are the game master for a social deduction party game 'Dhappabaj'.
-The innocent players were given this secret word: "${word.wordBn}" (${word.wordEn}) in category "${word.category}".
-Provide a clear, clever, concise 1-sentence description in Bengali and 1 sentence in English explaining what this word represents in everyday life, so innocent players who may not be experts have an immediate, vivid grasp of the word to give great clues.
-Format output strictly as JSON with keys "bn" and "en" only. No markdown fences.`;
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+
+    const targetTerm = word.wordEn || word.wordBn;
+    const prompt = `Provide ONLY the accurate, real-world factual definition or working method of the term "${targetTerm}" (Category: "${word.category}").
+Rules:
+- Write strictly in English.
+- No conversational text, no intro, no instructions, no markdown formatting.
+- Only the definition or working method in 1 to 2 concise sentences explaining what it is and how it functions.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
       contents: prompt,
     });
 
     const text = response.text?.trim() || '';
-    const cleanJson = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-    const parsed = JSON.parse(cleanJson);
-
-    if (parsed.bn && parsed.en) {
-      const result: AiWordDescription = {
-        bn: parsed.bn.trim(),
-        en: parsed.en.trim(),
-      };
+    if (text) {
+      // Strip any extra quotes or markdown fences
+      const cleanText = text.replace(/^["']|["']$/g, '').replace(/```.*?\n|```/g, '').trim();
+      const result: AiWordDescription = { en: cleanText };
       inMemoryCache.set(word.id, result);
       try {
         localStorage.setItem(cacheKey, JSON.stringify(result));
@@ -96,7 +107,7 @@ Format output strictly as JSON with keys "bn" and "en" only. No markdown fences.
       return result;
     }
   } catch (err) {
-    console.warn('AI word description generation failed, using smart fallback:', err);
+    console.warn('AI word definition generation failed, using fallback:', err);
   }
 
   inMemoryCache.set(word.id, fallback);
