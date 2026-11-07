@@ -1,5 +1,6 @@
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { cleanupRoomSubcollections } from './multiplayerService';
 import { WordItem, CategoryId } from '../types/game';
 import { ALL_WORDS } from '../data/words';
 import { OnlineRoomData, OnlinePlayer } from '../types/multiplayer';
@@ -232,6 +233,7 @@ export async function closeRoomByAdmin(roomCode: string): Promise<void> {
 // Delete room completely
 export async function deleteRoomByAdmin(roomCode: string): Promise<void> {
   const roomRef = doc(db, 'rooms', roomCode);
+  await cleanupRoomSubcollections(roomCode);
   await deleteDoc(roomRef);
   logSystemEvent('info', `Admin deleted room ${roomCode}`);
 }
