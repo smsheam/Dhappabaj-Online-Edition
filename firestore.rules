@@ -98,6 +98,24 @@ service cloud.firestore {
       allow update: if isSignedIn() && isValidId(roomId) && roomIdentityIsUnchanged() && (
         isRoomHost(roomId) || isAdmin() ||
         (
+          isSignedIn() &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'closedReason', 'updatedAt']) &&
+          (
+            (
+              resource.data.status == 'PLAYING' &&
+              resource.data.hostDisconnectedAt is number &&
+              request.time.toMillis() - resource.data.hostDisconnectedAt > 60000
+            ) ||
+            (
+              resource.data.lastActivityAt is number &&
+              request.time.toMillis() - resource.data.lastActivityAt >
+                (resource.data.status == 'PLAYING' ? 600000 : 900000)
+            )
+          ) &&
+          request.resource.data.status in ['CLOSED', 'EXPIRED']
+        ) ||
+        (
           isRoomMember(roomId) && (
             (
               resource.data.currentPhase == 'CLUE' &&
@@ -130,21 +148,6 @@ service cloud.firestore {
 
             (
               request.resource.data.diff(resource.data).affectedKeys()
-                .hasOnly(['status', 'closedReason', 'updatedAt']) &&
-              (
-                (
-                  resource.data.hostDisconnectedAt is number &&
-                  request.time.toMillis() - resource.data.hostDisconnectedAt > 60000
-                ) ||
-                (
-                  resource.data.lastActivityAt is number &&
-                  request.time.toMillis() - resource.data.lastActivityAt > (resource.data.status == 'PLAYING' ? 600000 : 900000)
-                )
-              ) &&
-              request.resource.data.status in ['CLOSED', 'EXPIRED']
-            ) ||
-            (
-              request.resource.data.diff(resource.data).affectedKeys()
                 .hasOnly(['status', 'closedReason', 'playerCount', 'updatedAt']) &&
               request.resource.data.status == 'CLOSED' &&
               request.resource.data.closedReason == 'empty_room' &&
@@ -165,7 +168,7 @@ service cloud.firestore {
           request.resource.data.id == playerId;
 
         allow update: if isSignedIn() && isValidId(roomId) && isValidId(playerId) && (
-          isRoomHost(roomId) || isAdmin() || isRoomClosed(roomId) ||
+          isRoomHost(roomId) || isAdmin() ||
           (
             get(/databases/$(database)/documents/rooms/$(roomId)).data.currentPhase == 'IMPOSTER_GUESS' &&
             isAssignedImposter(roomId) &&
@@ -194,8 +197,8 @@ service cloud.firestore {
 
       match /votes/{playerId} {
         allow get: if isSignedIn() && isValidId(roomId) && isValidId(playerId) &&
-          isRoomMember(roomId);
-        allow list: if isRoomMember(roomId);
+          (isRoomMember(roomId) || isRoomHost(roomId) || isAdmin() || isRoomClosed(roomId));
+        allow list: if isRoomMember(roomId) || isRoomHost(roomId) || isAdmin() || isRoomClosed(roomId);
 
         allow create, update: if isSignedIn() && isValidId(roomId) &&
           isValidId(playerId) && request.auth.uid == playerId &&
