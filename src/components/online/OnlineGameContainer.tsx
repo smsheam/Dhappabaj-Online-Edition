@@ -198,7 +198,7 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
     const heartbeatInterval = setInterval(async () => {
       const myPlayer = playersStateRef.current.find((p) => p.id === currentUserId);
       if (myPlayer) {
-        await sendPlayerHeartbeat(initialRoom.roomCode, isHost, myPlayer.name, myPlayer.avatar);
+        await sendPlayerHeartbeat(initialRoom.roomCode, isHost, myPlayer.name, myPlayer.avatar, playersStateRef.current.length);
       }
       // Check inactivity & host disconnect expiration (host only to prevent redundant writes)
       if (isHost) {
