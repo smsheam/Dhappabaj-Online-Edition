@@ -130,7 +130,7 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
           advanceTriggeredRef.current = true;
           proceedToClues();
         }
-      }, delay);
+      }, 1000);
 
       return () => clearTimeout(timer);
     }
