@@ -107,6 +107,7 @@ export interface OnlineRoomData {
   updatedAt: number;
   lastActivityAt: number; // 5 min inactivity tracking
   hostDisconnectedAt?: number | null; // 30s grace period for host disconnect
+  expiresAt?: unknown; // Firestore TTL timestamp for closed-room document cleanup
 }
 
 export interface OnlineVote {
