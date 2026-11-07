@@ -31,6 +31,7 @@ export const OnlineGameOverScreen: React.FC<OnlineGameOverScreenProps> = ({
   const isHost = currentPlayer.isHost;
   const [showExitWarning, setShowExitWarning] = useState<boolean>(false);
   const hasSavedMatchRef = useRef<boolean>(false);
+  const hasRecordedStatsRef = useRef<boolean>(false);
 
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
   const champion = sortedPlayers[0];
@@ -61,7 +62,8 @@ export const OnlineGameOverScreen: React.FC<OnlineGameOverScreenProps> = ({
 
   useEffect(() => {
     // Record lifetime stats for current player
-    if (currentPlayer && currentPlayer.id) {
+    if (currentPlayer && currentPlayer.id && !hasRecordedStatsRef.current) {
+      hasRecordedStatsRef.current = true;
       const revealedImposterIds = room.revealedImposterIds || [];
       const scoreMap = new Map((room.scoreDetails || []).map((sd) => [sd.playerId, sd]));
       const sd = scoreMap.get(currentPlayer.id);
