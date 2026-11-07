@@ -119,6 +119,8 @@ service cloud.firestore {
           isSignedIn() &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'closedReason', 'updatedAt', 'expiresAt']) &&
+          request.resource.data.expiresAt is timestamp &&
+          request.resource.data.expiresAt > request.time &&
           (
             (
               resource.data.status == 'PLAYING' &&
@@ -146,7 +148,17 @@ service cloud.firestore {
                 (
                   resource.data.clueTurnPlayerId == request.auth.uid &&
                   request.resource.data.clueTurnIndex == resource.data.clueTurnIndex + 1 &&
-                  request.resource.data.currentPhase == 'CLUE'
+                  request.resource.data.currentPhase == 'CLUE' &&
+                  (
+                    (
+                      request.resource.data.clueTurnIndex < resource.data.clueOrder.size() &&
+                      request.resource.data.clueTurnPlayerId == resource.data.clueOrder[request.resource.data.clueTurnIndex]
+                    ) ||
+                    (
+                      request.resource.data.clueTurnIndex == resource.data.clueOrder.size() &&
+                      request.resource.data.clueTurnPlayerId == null
+                    )
+                  )
                 ) ||
                 (
                   resource.data.clueTurnPlayerId == null &&
@@ -179,6 +191,8 @@ service cloud.firestore {
                 .hasOnly(['status', 'closedReason', 'playerCount', 'updatedAt', 'expiresAt']) &&
               request.resource.data.status == 'CLOSED' &&
               request.resource.data.closedReason == 'empty_room' &&
+              request.resource.data.expiresAt is timestamp &&
+              request.resource.data.expiresAt > request.time &&
               resource.data.playerCount <= 1 &&
               request.resource.data.playerCount == 0
             )
