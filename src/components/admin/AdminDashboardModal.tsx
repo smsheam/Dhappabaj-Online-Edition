@@ -110,7 +110,7 @@ const CATEGORY_LABELS: Record<string, { bn: string; en: string }> = {
   landmarks: { bn: 'স্থাপত্য ও ভাস্কর্য', en: 'Landmarks' },
 };
 
-type AdminTab = 'overview' | 'words' | 'rooms_players' | 'firebase';
+type AdminTab = 'overview' | 'words' | 'rooms_players' | 'firebase' | 'scoring' | 'instructions';
 
 export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   isOpen,
