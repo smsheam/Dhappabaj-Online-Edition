@@ -1,26 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Clock,
-  MessageSquare,
+  Users,
   Vote,
   AlertTriangle,
   ArrowRight,
   ChevronDown,
   ChevronUp,
-  Zap,
-  Shield,
-  Smile,
-  Timer,
 } from 'lucide-react';
 import { Language, Theme } from '../../types/game';
-import { OnlinePlayer, OnlineRoomData, ChatMessage } from '../../types/multiplayer';
-import {
-  setOnlineRoomPhase,
-  sendOnlineChatMessage,
-  subscribeToChatMessages,
-  CHAT_COOLDOWN_MS,
-} from '../../services/multiplayerService';
-import { getCustomQuickChats } from '../../services/adminService';
+import { OnlinePlayer, OnlineRoomData } from '../../types/multiplayer';
+import { setOnlineRoomPhase } from '../../services/multiplayerService';
 import { sound } from '../../utils/audio';
 
 interface OnlineDiscussionScreenProps {
@@ -40,41 +30,13 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
   const isEn = lang === 'en';
   const isHost = currentPlayer.isHost;
 
-  // Optimized: Last 3 messages only
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [showCluesList, setShowCluesList] = useState<boolean>(true);
-  const [quickCategory, setQuickCategory] = useState<'suspect' | 'defense' | 'fun'>('suspect');
-  const [cooldownSeconds, setCooldownSeconds] = useState<number>(0);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Synchronized Discussion Timer
   const [timeLeft, setTimeLeft] = useState<number>(() => {
     if (!room.phaseEndsAt) return room.settings.discussionTimer || 90;
     return Math.max(0, Math.ceil((room.phaseEndsAt - Date.now()) / 1000));
   });
-
-  // Subscribe to real-time chat with strict limit(3) from Firestore
-  useEffect(() => {
-    const unsub = subscribeToChatMessages(room.roomCode, (messages) => {
-      // Keep strictly the latest 3 messages
-      setChatMessages(messages.slice(-3));
-    });
-    return () => unsub();
-  }, [room.roomCode]);
-
-  // Auto-scroll chat to bottom
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
-
-  // Cooldown countdown timer
-  useEffect(() => {
-    if (cooldownSeconds <= 0) return;
-    const interval = setInterval(() => {
-      setCooldownSeconds((prev) => (prev > 1 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [cooldownSeconds]);
 
   const [autoAdvancing, setAutoAdvancing] = useState<boolean>(false);
 
@@ -109,28 +71,6 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
     await setOnlineRoomPhase(room.roomCode, 'VOTING', votingTime);
   };
 
-  const handleSendQuickPhrase = async (phrase: string) => {
-    if (cooldownSeconds > 0) return;
-    sound.playClick();
-
-    // Start 5-second local cooldown immediately
-    setCooldownSeconds(5);
-
-    const result = await sendOnlineChatMessage(room.roomCode, currentPlayer, phrase);
-    if (!result.success && result.cooldownRemaining) {
-      setCooldownSeconds(result.cooldownRemaining);
-    }
-  };
-
-  const customQuickChats = getCustomQuickChats();
-  const quickPhraseGroups = {
-    suspect: customQuickChats.suspect.map((item) => (isEn ? item.en : item.bn)),
-    defense: customQuickChats.defense.map((item) => (isEn ? item.en : item.bn)),
-    fun: customQuickChats.fun.map((item) => (isEn ? item.en : item.bn)),
-  };
-
-  const quickEmojis = ['😂', '🤫', '👀', '🔥', '💀', '🕵️', '🤡', '🎯', '🍼', '🛑'];
-
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
   const formattedTime = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
@@ -141,11 +81,11 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
       <div className="p-3 sm:p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
-            <MessageSquare className="w-5 h-5" />
+            <Users className="w-5 h-5" />
           </div>
           <div>
             <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
-              {isEn ? 'Discussion & Quick Chat' : 'সরাসরি আলোচনা ও কুইক চ্যাট'}
+              {isEn ? 'Discussion' : 'আলোচনা পর্ব'}
             </h2>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
               {isEn ? 'Interrogate suspects before voting' : 'ভোটের পূর্বে সবাইকে জেরা করুন'}
@@ -167,7 +107,7 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
       </div>
 
       {/* Clues Review Collapsible Tray */}
-      <div className="my-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-2.5 shadow-xs">
+      <div className="my-2 flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-2.5 shadow-xs">
         <button
           type="button"
           onClick={() => setShowCluesList(!showCluesList)}
@@ -184,7 +124,7 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
         </button>
 
         {showCluesList && (
-          <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-[20vh] overflow-y-auto pt-1 border-t border-slate-100 dark:border-slate-800">
+          <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-[55vh] overflow-y-auto pt-1 border-t border-slate-100 dark:border-slate-800">
             {players.map((p) => {
               const isMe = p.id === currentPlayer.id;
               return (
@@ -210,154 +150,6 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
             })}
           </div>
         )}
-      </div>
-
-      {/* Optimized Chat Area: Displays strictly last 3 messages */}
-      <div className="my-1 flex-1 flex flex-col min-h-[30vh] max-h-[42vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-3 shadow-xs overflow-hidden">
-        {/* Header indicator */}
-        <div className="flex items-center justify-between px-1 pb-1.5 border-b border-slate-100 dark:border-slate-800 text-[11px] text-slate-500">
-          <span className="font-bold flex items-center gap-1">
-            <MessageSquare className="w-3 h-3 text-amber-500" />
-            <span>{isEn ? 'Live Quick Chat (Latest 3)' : 'লাইভ কুইক চ্যাট (সর্বশেষ ৩টি)'}</span>
-          </span>
-          {cooldownSeconds > 0 ? (
-            <span className="px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 text-[10px] font-bold flex items-center gap-1 animate-pulse">
-              <Timer className="w-3 h-3" />
-              <span>{isEn ? `Wait ${cooldownSeconds}s` : `অপেক্ষা করুন ${cooldownSeconds} সে.`}</span>
-            </span>
-          ) : (
-            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
-              {isEn ? 'Ready to send' : 'মেসেজ দেওয়ার জন্য প্রস্তুত'}
-            </span>
-          )}
-        </div>
-
-        {/* Messages Feed (Only Last 3 Messages Displayed) */}
-        <div className="flex-1 overflow-y-auto space-y-2 py-2">
-          {chatMessages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-4 text-slate-400 text-xs">
-              <MessageSquare className="w-7 h-7 opacity-30 mb-1" />
-              <span>{isEn ? 'No messages yet. Tap a quick phrase below!' : 'এখনও কোনো বার্তা নেই। নিচে কুইক চ্যাট বাটনে ট্যাপ করুন!'}</span>
-            </div>
-          ) : (
-            chatMessages.slice(-3).map((msg) => {
-              const isMe = msg.senderId === currentPlayer.id;
-              const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-              return (
-                <div
-                  key={msg.id}
-                  className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}
-                >
-                  {!isMe && (
-                    <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-sm shrink-0 mb-1">
-                      {msg.senderAvatar || '🕵️'}
-                    </div>
-                  )}
-
-                  <div
-                    className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-xs shadow-xs ${
-                      isMe
-                        ? 'bg-amber-500 text-slate-950 rounded-br-xs font-semibold'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-xs'
-                    }`}
-                  >
-                    {!isMe && (
-                      <div className="text-[10px] font-bold text-amber-600 dark:text-amber-400 mb-0.5">
-                        {msg.senderName}
-                      </div>
-                    )}
-
-                    <div className="leading-relaxed break-words">{msg.text}</div>
-
-                    <div
-                      className={`text-[9px] text-right mt-0.5 ${
-                        isMe ? 'text-amber-900/70' : 'text-slate-400'
-                      }`}
-                    >
-                      {timeStr}
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Quick Emojis Bar */}
-        <div className="py-1.5 flex items-center gap-1 overflow-x-auto no-scrollbar border-t border-slate-100 dark:border-slate-800 shrink-0">
-          {quickEmojis.map((emoji) => (
-            <button
-              type="button"
-              key={emoji}
-              disabled={cooldownSeconds > 0}
-              onClick={() => handleSendQuickPhrase(emoji)}
-              className="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-amber-500/20 active:scale-90 text-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-              title={emoji}
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
-
-        {/* Quick Category Selector */}
-        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={() => setQuickCategory('suspect')}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
-              quickCategory === 'suspect'
-                ? 'bg-amber-500 text-slate-950 shadow-xs'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-            }`}
-          >
-            <Zap className="w-3 h-3" />
-            <span>{isEn ? 'Suspect' : 'জেরা ও সন্দেহ'}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setQuickCategory('defense')}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
-              quickCategory === 'defense'
-                ? 'bg-amber-500 text-slate-950 shadow-xs'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-            }`}
-          >
-            <Shield className="w-3 h-3" />
-            <span>{isEn ? 'Defense' : 'আত্মরক্ষা'}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setQuickCategory('fun')}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
-              quickCategory === 'fun'
-                ? 'bg-amber-500 text-slate-950 shadow-xs'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-            }`}
-          >
-            <Smile className="w-3 h-3" />
-            <span>{isEn ? 'Fun & Banter' : 'মজা ও প্রতিক্রিয়া'}</span>
-          </button>
-        </div>
-
-        {/* Quick Phrase Chips Grid */}
-        <div className="mt-2 grid grid-cols-2 gap-1.5 max-h-[14vh] overflow-y-auto no-scrollbar shrink-0">
-          {quickPhraseGroups[quickCategory].map((phrase, idx) => (
-            <button
-              type="button"
-              key={idx}
-              disabled={cooldownSeconds > 0}
-              onClick={() => handleSendQuickPhrase(phrase)}
-              className={`p-2 rounded-xl text-left text-[11px] font-semibold border transition-all truncate cursor-pointer ${
-                cooldownSeconds > 0
-                  ? 'bg-slate-100 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 text-slate-400 opacity-60 cursor-not-allowed'
-                  : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700/70 text-slate-800 dark:text-slate-200 hover:border-amber-500 hover:bg-amber-500/10 active:scale-98'
-              }`}
-            >
-              {phrase}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Footer Actions */}
