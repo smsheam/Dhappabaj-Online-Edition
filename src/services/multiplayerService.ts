@@ -419,7 +419,7 @@ export async function joinOnlineRoom(
     try {
       const batch = writeBatch(db);
       batch.update(playerRef, playerUpdates);
-      batch.update(roomRef, roomUpdates);
+      if (isHost) batch.update(roomRef, roomUpdates);
       await batch.commit();
 
       sessionStorage.setItem('dhappabaj_active_room', roomCode);
@@ -620,12 +620,6 @@ export async function leaveOnlineRoom(roomCode: string) {
           updatedAt: now,
         });
         await cleanupRoomSubcollections(roomCode);
-      } else {
-        await updateDoc(roomRef, {
-          playerCount: activePlayers.length,
-          lastActivityAt: now,
-          updatedAt: now,
-        });
       }
     }
   } catch (error) {
