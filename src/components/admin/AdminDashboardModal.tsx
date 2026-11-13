@@ -192,7 +192,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         loadEditors();
       } else if (activeTab === 'firebase') {
         loadUsers();
-      } else if (activeTab === 'instructions') {
         setSystemLogs(getSystemLogs());
       }
     }
@@ -1077,163 +1076,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
 
 
-            {/* TAB 4: SCORING MANAGEMENT */}
-            {activeTab === 'scoring' && (
-              <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-5">
-                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
-                  <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-amber-500" />
-                    <span>{isEn ? 'Scoring Configuration Engine' : 'পয়েন্ট ও স্কোরিং ম্যানেজমেন্ট'}</span>
-                  </h4>
-                  <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
-                    {isEn
-                      ? 'Changes apply immediately to all new rounds and matches across Online and Pass & Play.'
-                      : 'এখানে করা পরিবর্তন নিশ্চিত করলে সব নতুন ম্যাচ এবং অনলাইন রুমে তা কার্যকর হবে।'}
-                  </p>
-                </div>
 
-                {scoringSaveSuccess && (
-                  <div className="p-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-2 animate-in fade-in">
-                    <CheckCircle className="w-4 h-4" />
-                    <span>{isEn ? 'Scoring rules successfully updated!' : 'স্কোরিং নিয়মাবলী সফলভাবে আপডেট হয়েছে!'}</span>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Citizen Scoring Block */}
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
-                    <h5 className="text-xs font-black uppercase text-emerald-600 tracking-wider">
-                      {isEn ? 'Citizen Scoring Rules' : 'নাগরিক স্কোরিং নিয়ম'}
-                    </h5>
-
-                    <div className="space-y-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span>সঠিক ধাপ্পাবাজ নির্বাচন:</span>
-                        <input
-                          type="number"
-                          value={scoringConfig.citizenCorrectVotePoints}
-                          onChange={(e) => setScoringConfig({ ...scoringConfig, citizenCorrectVotePoints: Number(e.target.value) })}
-                          className="w-20 px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border text-center font-bold"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>নির্দোষকে ভুল ভোট (পেনাল্টি):</span>
-                        <input
-                          type="number"
-                          value={scoringConfig.citizenWrongVotePoints}
-                          onChange={(e) => setScoringConfig({ ...scoringConfig, citizenWrongVotePoints: Number(e.target.value) })}
-                          className="w-20 px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border text-center font-bold"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>ধাপ্পাবাজ পরাজিত হলে নাগরিক জয় বোনাস:</span>
-                        <input
-                          type="number"
-                          value={scoringConfig.citizenImposterLossBonus}
-                          onChange={(e) => setScoringConfig({ ...scoringConfig, citizenImposterLossBonus: Number(e.target.value) })}
-                          className="w-20 px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border text-center font-bold"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>ভুলক্রমে বহিষ্কৃত হলে সান্ত্বনা বোনাস:</span>
-                        <input
-                          type="number"
-                          value={scoringConfig.citizenConsolationPoints}
-                          onChange={(e) => setScoringConfig({ ...scoringConfig, citizenConsolationPoints: Number(e.target.value) })}
-                          className="w-20 px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border text-center font-bold"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Imposter Scoring Block */}
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
-                    <h5 className="text-xs font-black uppercase text-rose-600 tracking-wider">
-                      {isEn ? 'Imposter Scoring Rules' : 'ধাপ্পাবাজ স্কোরিং নিয়ম'}
-                    </h5>
-
-                    <div className="space-y-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span>ধাপ্পাবাজ জয়লাভ পয়েন্ট:</span>
-                        <input
-                          type="number"
-                          value={scoringConfig.imposterWinPoints}
-                          onChange={(e) => setScoringConfig({ ...scoringConfig, imposterWinPoints: Number(e.target.value) })}
-                          className="w-20 px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border text-center font-bold"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>০ ভোট পেয়ে জয়লাভের বোনাস:</span>
-                        <input
-                          type="number"
-                          value={scoringConfig.imposterZeroVotesBonus}
-                          onChange={(e) => setScoringConfig({ ...scoringConfig, imposterZeroVotesBonus: Number(e.target.value) })}
-                          className="w-20 px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border text-center font-bold"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>ধাপ্পাবাজ পরাজিত হলে পয়েন্ট (ঠিক ০):</span>
-                        <input
-                          type="number"
-                          value={scoringConfig.imposterLossPoints}
-                          onChange={(e) => setScoringConfig({ ...scoringConfig, imposterLossPoints: Number(e.target.value) })}
-                          className="w-20 px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border text-center font-bold"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Save button with Confirmation Step */}
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowScoringConfirm(true)}
-                    className="py-3 px-6 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm shadow-md cursor-pointer flex items-center gap-2"
-                  >
-                    <Check className="w-4 h-4 stroke-3" />
-                    <span>{isEn ? 'Apply Scoring Configuration' : 'নতুন স্কোরিং নিয়ম কার্যকর করুন'}</span>
-                  </button>
-                </div>
-
-                {/* Scoring Confirmation Dialog */}
-                {showScoringConfirm && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
-                    <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4 text-center">
-                      <div className="w-12 h-12 mx-auto rounded-2xl bg-amber-500/15 text-amber-500 flex items-center justify-center text-xl">
-                        <AlertTriangle className="w-6 h-6" />
-                      </div>
-                      <div className="space-y-1">
-                        <h4 className="text-base font-black text-slate-900 dark:text-white">
-                          {isEn ? 'Confirm Scoring Rules Update?' : 'স্কোরিং পরিবর্তন নিশ্চিত করুন'}
-                        </h4>
-                        <p className="text-xs text-slate-500">
-                          {isEn
-                            ? 'This new scoring will take effect immediately in all future matches.'
-                            : 'এই নতুন স্কোরিং সূত্রটি সব ভবিষ্যৎ রাউন্ড ও ম্যাচে প্রযোজ্য হবে।'}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setShowScoringConfirm(false)}
-                          className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold text-xs cursor-pointer"
-                        >
-                          {isEn ? 'Cancel' : 'বাতিল'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleSaveScoringConfig}
-                          className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs cursor-pointer"
-                        >
-                          {isEn ? 'Confirm & Apply' : 'হ্যাঁ, কার্যকর করুন'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* TAB 5: ROOMS, PLAYERS & ROLES */}
             {activeTab === 'rooms_players' && (
@@ -1503,37 +1346,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               </div>
             )}
 
-            {/* TAB 7: OPERATOR INSTRUCTIONS */}
-            {activeTab === 'instructions' && (
-              <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-4 text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2">
-                  <h4 className="font-black text-slate-900 dark:text-white text-sm sm:text-base flex items-center gap-2">
-                    <span>💡</span>
-                    <span>{isEn ? 'Firebase Quota & How to Never Get Blocked' : 'ফায়ারবেস কোটা ও নিরবচ্ছিন্ন গেম চালনা'}</span>
-                  </h4>
-                  <p>
-                    {isEn
-                      ? 'The Firebase free tier allows 50,000 reads and 20,000 writes every single day.'
-                      : 'ফায়ারবেস ফ্রি স্পার্ক প্ল্যানে প্রতিদিন ৫০,০০০ রিড ও ২০,০০০ রাইট সম্পূর্ণ ফ্রি। সীমা অতিক্রম করলে প্যাসিফিক মধ্যরাতে এটি স্বয়ংক্রিয় রিসেট হয়।'}
-                  </p>
-                  <p className="font-bold text-amber-700 dark:text-amber-300">
-                    {isEn
-                      ? 'Best practice: In Firebase Console, upgrade the project to Blaze Plan (Pay as you go). You still get the 50,000 daily reads 100% free forever, and any extra reads cost just $0.06 per 100,000 reads, meaning your game will NEVER freeze!'
-                      : 'স্থায়ী সমাধান: Firebase Console এ গিয়ে প্রজেক্টটিকে Blaze Plan এ উন্নীত করুন। ৫০,০০০ দৈনিক ফ্রি সীমা সবসময় বহাল থাকবে এবং খেলা কখনো আটকে যাবে না!'}
-                  </p>
-                </div>
 
-                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
-                  <h4 className="font-black text-slate-900 dark:text-white text-sm flex items-center gap-2">
-                    <span>🛡️</span>
-                    <span>{isEn ? 'Master Admin Credentials' : 'মাস্টার অ্যাডমিন ক্রেডেনশিয়াল'}</span>
-                  </h4>
-                  <p className="font-mono text-xs">
-                    Email: <strong>{ADMIN_AUTHORIZED_EMAIL}</strong> | Master Passcode: <strong>{ADMIN_MASTER_PASSCODE}</strong>
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
