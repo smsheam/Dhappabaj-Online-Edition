@@ -14,6 +14,7 @@ import { RulesModal } from './components/RulesModal';
 import { pickRandomWord } from './data/words';
 import { calculateRoundScores } from './utils/scoring';
 import { sound } from './utils/audio';
+import { syncAdSenseSound } from './utils/adsense';
 import { preloadWordImage } from './utils/wordImageService';
 
 import { OnlinePlayer, OnlineRoomData } from './types/multiplayer';
@@ -205,6 +206,7 @@ export default function App() {
   const handleToggleMute = () => {
     const muted = sound.toggleMute();
     setIsMuted(muted);
+    syncAdSenseSound(muted);
   };
 
   // Intro -> Setup

@@ -4,6 +4,7 @@ import { Language, Theme } from '../../types/game';
 import { OnlinePlayer, OnlineRoomData } from '../../types/multiplayer';
 import { startOnlineRound, setOnlineRoomPhase, confirmOnlineNextRound } from '../../services/multiplayerService';
 import { sound } from '../../utils/audio';
+import { triggerThreeRoundVideoAd } from '../../utils/adsense';
 
 interface OnlineScoreboardScreenProps {
   room: OnlineRoomData;
@@ -68,6 +69,9 @@ export const OnlineScoreboardScreen: React.FC<OnlineScoreboardScreenProps> = ({
     setIsSubmittingReady(true);
     sound.playClick();
     try {
+      if (room.currentRound > 0 && room.currentRound % 3 === 0) {
+        await triggerThreeRoundVideoAd(room.currentRound);
+      }
       await confirmOnlineNextRound(room.roomCode, currentPlayer.id);
     } catch (err) {
       console.error('Error confirming next round:', err);
@@ -77,11 +81,20 @@ export const OnlineScoreboardScreen: React.FC<OnlineScoreboardScreenProps> = ({
   };
 
   const handleHostForceAdvance = async () => {
+    if (isSubmittingReady) return;
+    setIsSubmittingReady(true);
     sound.playClick();
-    if (isLastRound) {
-      await setOnlineRoomPhase(room.roomCode, 'GAME_OVER');
-    } else {
-      await startOnlineRound(room.roomCode, room.currentRound + 1);
+    try {
+      if (room.currentRound > 0 && room.currentRound % 3 === 0 && !hasConfirmed) {
+        await triggerThreeRoundVideoAd(room.currentRound);
+      }
+      if (isLastRound) {
+        await setOnlineRoomPhase(room.roomCode, 'GAME_OVER');
+      } else {
+        await startOnlineRound(room.roomCode, room.currentRound + 1);
+      }
+    } finally {
+      setIsSubmittingReady(false);
     }
   };
 

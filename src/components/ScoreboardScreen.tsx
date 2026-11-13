@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Trophy, ArrowRight, Crown } from 'lucide-react';
 import { Player, RoundResult, Language, Theme } from '../types/game';
 import { GameTopBar } from './GameTopBar';
 import { PlayerAvatar } from './PlayerAvatar';
 import { sound } from '../utils/audio';
+import { triggerThreeRoundVideoAd } from '../utils/adsense';
 
 interface ScoreboardScreenProps {
   players: Player[];
@@ -39,6 +40,28 @@ export const ScoreboardScreen: React.FC<ScoreboardScreenProps> = ({
   const isEn = lang === 'en';
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
   const isFinalRound = currentRound >= totalRounds;
+  const [isLoadingAd, setIsLoadingAd] = useState<boolean>(false);
+
+  const handleProceedWithAdBreak = async () => {
+    if (isLoadingAd) return;
+    if (isFinalRound) {
+      sound.playSuccessChime();
+    } else {
+      sound.playClick();
+    }
+
+    if (currentRound > 0 && currentRound % 3 === 0) {
+      setIsLoadingAd(true);
+      await triggerThreeRoundVideoAd(currentRound);
+      setIsLoadingAd(false);
+    }
+
+    if (isFinalRound) {
+      onFinishGame();
+    } else {
+      onStartNextRound();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between py-6 px-4 md:px-8 max-w-2xl mx-auto transition-colors duration-200">
@@ -140,26 +163,28 @@ export const ScoreboardScreen: React.FC<ScoreboardScreenProps> = ({
         {isFinalRound ? (
           <button
             type="button"
-            onClick={() => {
-              sound.playSuccessChime();
-              onFinishGame();
-            }}
-            className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-lg shadow-xl shadow-amber-500/20 flex items-center justify-center gap-2 transition-all transform active:scale-98 cursor-pointer"
+            disabled={isLoadingAd}
+            onClick={handleProceedWithAdBreak}
+            className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-lg shadow-xl shadow-amber-500/20 flex items-center justify-center gap-2 transition-all transform active:scale-98 cursor-pointer disabled:opacity-60"
           >
-            <span>{isEn ? 'Final Champion & Podium 🏆' : 'চূড়ান্ত ফলাফল ও চ্যাম্পিয়ন দেখুন 🏆'}</span>
+            <span>
+              {isLoadingAd
+                ? isEn ? 'Loading...' : 'লোড হচ্ছে...'
+                : isEn ? 'Final Champion & Podium 🏆' : 'চূড়ান্ত ফলাফল ও চ্যাম্পিয়ন দেখুন 🏆'}
+            </span>
             <ArrowRight className="w-5 h-5" />
           </button>
         ) : (
           <button
             type="button"
-            onClick={() => {
-              sound.playClick();
-              onStartNextRound();
-            }}
-            className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black text-lg shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all transform active:scale-98 cursor-pointer"
+            disabled={isLoadingAd}
+            onClick={handleProceedWithAdBreak}
+            className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black text-lg shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all transform active:scale-98 cursor-pointer disabled:opacity-60"
           >
             <span>
-              {isEn
+              {isLoadingAd
+                ? isEn ? 'Loading...' : 'লোড হচ্ছে...'
+                : isEn
                 ? `Start Round ${currentRound + 1} of ${totalRounds}`
                 : `পরবর্তী রাউন্ড শুরু করুন (রাউন্ড ${currentRound + 1} / ${totalRounds})`}
             </span>
