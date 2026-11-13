@@ -35,6 +35,8 @@ import {
   sendOnlineChatMessage,
 } from '../../services/multiplayerService';
 import { sound } from '../../utils/audio';
+import { auth } from '../../firebase';
+import { isOwnerEmail } from '../../services/roleService';
 
 interface OnlineLobbyScreenProps {
   room: OnlineRoomData;
@@ -264,7 +266,11 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
             </button>
           )}
 
-          {onOpenAdmin && (
+          {onOpenAdmin &&
+            auth.currentUser &&
+            !auth.currentUser.isAnonymous &&
+            auth.currentUser.emailVerified &&
+            isOwnerEmail(auth.currentUser.email) && (
             <button
               type="button"
               onClick={() => {

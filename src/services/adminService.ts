@@ -1,8 +1,9 @@
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { WordItem, CategoryId } from '../types/game';
+import { WordItem } from '../types/game';
 import { ALL_WORDS, invalidateWordPoolCache } from '../data/words';
-import { OnlineRoomData, OnlinePlayer } from '../types/multiplayer';
+import { OnlineRoomData } from '../types/multiplayer';
+import { isOwnerEmail } from './roleService';
 
 export const ADMIN_AUTHORIZED_EMAIL = 'smsheam1@gmail.com';
 export const ADMIN_MASTER_PASSCODE = 'dhappabaj2026';
@@ -54,20 +55,12 @@ export const DEFAULT_QUICK_CHATS: CustomQuickChats = {
   ],
 };
 
-// Check if current user or session is admin
+// Check if current authenticated user is strictly the primary owner (smsheam1@gmail.com)
 export function isUserAdmin(): boolean {
   if (typeof window === 'undefined') return false;
-  // 1. Check logged-in Firebase user email
-  const currentEmail = auth.currentUser?.email?.toLowerCase();
-  if (currentEmail && currentEmail === ADMIN_AUTHORIZED_EMAIL.toLowerCase()) {
-    return true;
-  }
-  // 2. Check session passcode unlock
-  try {
-    const isUnlocked = sessionStorage.getItem(ADMIN_AUTH_SESSION_KEY) === 'true';
-    if (isUnlocked) return true;
-  } catch {}
-  return false;
+  const user = auth.currentUser;
+  if (!user || user.isAnonymous || !user.emailVerified) return false;
+  return isOwnerEmail(user.email);
 }
 
 export function unlockAdminWithPasscode(passcode: string): boolean {

@@ -33,8 +33,8 @@ import {
   createDefaultProfile,
   saveUserProfile,
 } from './services/userService';
-import { isOwnerEmail, getUserRole } from './services/roleService';
-import { isUserAdmin } from './services/adminService';
+import { isOwnerEmail } from './services/roleService';
+import { lockAdminSession } from './services/adminService';
 import { auth } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Analytics } from '@vercel/analytics/react';
@@ -109,14 +109,19 @@ export default function App() {
   useEffect(() => {
     let unsubProfile: (() => void) | null = null;
 
-    const checkAdmin = async (prof: UserProfile | null) => {
-      const email = auth.currentUser?.email || prof?.email;
-      if (isOwnerEmail(email) || isUserAdmin()) {
-        setCanAccessAdmin(true);
-        return;
+    const checkAdmin = (firebaseUser?: typeof auth.currentUser) => {
+      const currentUser = firebaseUser !== undefined ? firebaseUser : auth.currentUser;
+      const allowed = Boolean(
+        currentUser &&
+        !currentUser.isAnonymous &&
+        currentUser.emailVerified &&
+        isOwnerEmail(currentUser.email)
+      );
+      setCanAccessAdmin(allowed);
+      if (!allowed) {
+        setIsAdminOpen(false);
+        lockAdminSession();
       }
-      const roleInfo = await getUserRole(auth.currentUser?.uid, email || undefined);
-      setCanAccessAdmin(roleInfo.role === 'owner' || roleInfo.role === 'editor');
     };
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -130,11 +135,11 @@ export default function App() {
         try {
           const guestProfile = await loginAsGuest();
           setUserProfile(guestProfile);
-          checkAdmin(guestProfile);
+          checkAdmin(auth.currentUser);
           unsubProfile = subscribeToUserProfile(guestProfile.uid, (updated) => {
             if (updated) {
               setUserProfile(updated);
-              checkAdmin(updated);
+              checkAdmin(auth.currentUser);
             }
           });
         } catch (err) {
@@ -157,12 +162,12 @@ export default function App() {
         }
 
         setUserProfile(profile);
-        checkAdmin(profile);
+        checkAdmin(user);
 
         unsubProfile = subscribeToUserProfile(user.uid, (updated) => {
           if (updated) {
             setUserProfile(updated);
-            checkAdmin(updated);
+            checkAdmin(auth.currentUser);
           }
         });
       } catch (err) {
@@ -179,6 +184,9 @@ export default function App() {
   const handleSignOut = async () => {
     sound.playClick();
     setIsProfileOpen(false);
+    setIsAdminOpen(false);
+    setCanAccessAdmin(false);
+    lockAdminSession();
     await signOutUser();
     // Return to guest mode seamlessly on home screen
     const guestProfile = await loginAsGuest();
@@ -403,7 +411,7 @@ export default function App() {
       {isRulesOpen && (
         <RulesModal isOpen={isRulesOpen} onClose={() => setIsRulesOpen(false)} lang={lang} />
       )}
-      {isAdminOpen && (
+      {isAdminOpen && canAccessAdmin && (
         <AdminDashboardModal isOpen={isAdminOpen} onClose={() => setIsAdminOpen(false)} lang={lang} theme={theme} />
       )}
 
@@ -468,7 +476,7 @@ export default function App() {
             setPhase('INTRO');
             setIsOnlineModalOpen(true);
           }}
-          onOpenAdmin={() => setIsAdminOpen(true)}
+          onOpenAdmin={canAccessAdmin ? () => setIsAdminOpen(true) : undefined}
         />
       ) : (
         <>
