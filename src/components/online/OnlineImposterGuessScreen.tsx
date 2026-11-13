@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { HelpCircle, Sparkles, Check, Send, AlertTriangle } from 'lucide-react';
 import { Language, Theme } from '../../types/game';
 import { OnlinePlayer, OnlineRoomData, PrivatePlayerRole } from '../../types/multiplayer';
@@ -27,6 +27,7 @@ export const OnlineImposterGuessScreen: React.FC<OnlineImposterGuessScreenProps>
 
   const [customGuess, setCustomGuess] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const submittingRef = useRef<boolean>(false);
 
   // Generate 4 multiple choice cards for quick tap
   const [choices] = useState(() => {
@@ -37,25 +38,30 @@ export const OnlineImposterGuessScreen: React.FC<OnlineImposterGuessScreenProps>
   });
 
   const handleSelectChoice = async (wordText: string) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setIsSubmitting(true);
     sound.playClick();
     try {
       await submitOnlineImposterGuess(room.roomCode, wordText);
     } catch (err) {
       console.error(err);
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
 
   const handleCustomSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customGuess.trim()) return;
+    if (!customGuess.trim() || submittingRef.current) return;
+    submittingRef.current = true;
     setIsSubmitting(true);
     sound.playClick();
     try {
       await submitOnlineImposterGuess(room.roomCode, customGuess.trim());
     } catch (err) {
       console.error(err);
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -68,19 +74,41 @@ export const OnlineImposterGuessScreen: React.FC<OnlineImposterGuessScreenProps>
   useEffect(() => {
     if (!room.phaseEndsAt) return;
 
-    const interval = setInterval(() => {
+    const updateTick = () => {
       const remaining = Math.max(0, Math.ceil((room.phaseEndsAt! - Date.now()) / 1000));
       setTimeLeft(remaining);
+      return remaining;
+    };
 
-      if (remaining === 0 && !isSubmitting) {
-        setIsSubmitting(true);
+    updateTick();
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const interval = setInterval(() => {
+      const remaining = updateTick();
+
+      if (remaining === 0 && !submittingRef.current) {
         clearInterval(interval);
-        submitOnlineImposterGuess(room.roomCode, '(সময় শেষ)');
+        if (isCaughtImposter) {
+          submittingRef.current = true;
+          setIsSubmitting(true);
+          submitOnlineImposterGuess(room.roomCode, '(সময় শেষ)');
+        } else if (currentPlayer.isHost) {
+          fallbackTimer = setTimeout(() => {
+            if (!submittingRef.current) {
+              submittingRef.current = true;
+              setIsSubmitting(true);
+              submitOnlineImposterGuess(room.roomCode, '(সময় শেষ)');
+            }
+          }, 1500);
+        }
       }
     }, 1000);
 
-    return () => clearInterval(interval);
-  }, [room.phaseEndsAt, isSubmitting, room.roomCode]);
+    return () => {
+      clearInterval(interval);
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+    };
+  }, [room.phaseEndsAt, room.roomCode, isCaughtImposter, currentPlayer.isHost]);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between p-4 sm:p-8 max-w-xl mx-auto transition-colors duration-200">

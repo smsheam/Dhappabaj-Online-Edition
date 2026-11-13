@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
   Trophy,
@@ -41,14 +41,14 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
   const isEliminatedImposter = eliminatedPlayer ? imposterIds.includes(eliminatedPlayer.id) : false;
   const isImposterWin = room.winner === 'imposter';
 
-  // Auto progression countdown to scoreboard (20 seconds)
-  const [autoTimer, setAutoTimer] = useState<number>(() => {
-    if (room.phaseEndsAt) {
-      const remaining = Math.ceil((room.phaseEndsAt - Date.now()) / 1000);
-      return Math.max(1, Math.min(20, remaining));
-    }
-    return 20;
-  });
+  // Auto progression countdown to scoreboard (20 seconds, synchronized via phaseEndsAt)
+  const fallbackEndAtRef = useRef<number>(Date.now() + 20000);
+  const targetEndAt = room.phaseEndsAt || fallbackEndAtRef.current;
+  const proceedingRef = useRef<boolean>(false);
+
+  const [autoTimer, setAutoTimer] = useState<number>(() =>
+    Math.max(0, Math.min(20, Math.ceil((targetEndAt - Date.now()) / 1000)))
+  );
 
   useEffect(() => {
     sound.playSuspenseReveal();
@@ -68,24 +68,51 @@ export const OnlineResultScreen: React.FC<OnlineResultScreenProps> = ({
   }, []);
 
   const handleProceedToScoreboard = async () => {
+    if (proceedingRef.current) return;
+    proceedingRef.current = true;
     sound.playClick();
-    await setOnlineRoomPhase(room.roomCode, 'ROUND_SUMMARY');
+    try {
+      await setOnlineRoomPhase(room.roomCode, 'ROUND_SUMMARY');
+    } catch (err) {
+      console.error(err);
+      proceedingRef.current = false;
+    }
   };
 
   useEffect(() => {
+    const endAt = room.phaseEndsAt || fallbackEndAtRef.current;
+
+    const updateTick = () => {
+      const remaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+      setAutoTimer(remaining);
+      return remaining;
+    };
+
+    updateTick();
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
     const interval = setInterval(() => {
-      setAutoTimer((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
+      const remaining = updateTick();
+      if (remaining === 0 && !proceedingRef.current) {
+        clearInterval(interval);
+        if (currentPlayer.isHost) {
           handleProceedToScoreboard();
-          return 0;
+        } else {
+          // Fallback only if host failed to advance after 2 seconds
+          fallbackTimer = setTimeout(() => {
+            if (!proceedingRef.current) {
+              handleProceedToScoreboard();
+            }
+          }, 2000);
         }
-        return prev - 1;
-      });
+      }
     }, 1000);
 
-    return () => clearInterval(interval);
-  }, [room.roomCode]);
+    return () => {
+      clearInterval(interval);
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+    };
+  }, [room.roomCode, room.phaseEndsAt, currentPlayer.isHost]);
 
   // Vote map: voterId -> suspectId or suspectIds
   const revealedVotes = room.revealedVotes || {};

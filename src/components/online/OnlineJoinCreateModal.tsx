@@ -102,10 +102,12 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
     }
   };
 
-  // Eagerly ensure auth on mount
+  // Ensure auth only when modal is open and no user is present
   useEffect(() => {
-    ensureAuthenticatedUser().catch(() => {});
-  }, []);
+    if (isOpen && !auth.currentUser) {
+      ensureAuthenticatedUser().catch(() => {});
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (initialRoomCode) {
@@ -116,12 +118,14 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleNameChange = (val: string) => {
-    setName(val);
+  const persistNameToSession = (val: string) => {
     try {
       sessionStorage.setItem('dhappabaj_session_name', val);
-      localStorage.removeItem('dhappabaj_name');
     } catch {}
+  };
+
+  const handleNameChange = (val: string) => {
+    setName(val);
   };
 
   const handleAvatarChange = (em: string) => {
@@ -208,6 +212,7 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
       return;
     }
 
+    persistNameToSession(name);
     setLoading(true);
     sound.playClick();
     try {
@@ -296,6 +301,7 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
       return;
     }
 
+    persistNameToSession(name);
     setLoading(true);
     sound.playClick();
     try {
@@ -371,7 +377,7 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 animate-in fade-in duration-150">
       <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5 relative">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
@@ -470,6 +476,7 @@ export const OnlineJoinCreateModal: React.FC<OnlineJoinCreateModalProps> = ({
                 type="text"
                 value={name}
                 onChange={(e) => handleNameChange(e.target.value)}
+                onBlur={(e) => persistNameToSession(e.target.value)}
                 maxLength={20}
                 placeholder={isEn ? 'Enter your name (e.g. Sheam)' : 'নাম লিখুন (যেমন: সিয়াম)'}
                 className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-sm font-semibold focus:outline-none focus:border-amber-500"

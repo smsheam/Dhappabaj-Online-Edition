@@ -105,9 +105,16 @@ export const OnlineRoleRevealScreen: React.FC<OnlineRoleRevealScreenProps> = ({
   useEffect(() => {
     if (!room.phaseEndsAt || room.currentPhase !== 'ROLE_REVEAL') return;
 
-    const interval = setInterval(() => {
+    const updateTick = () => {
       const remaining = Math.max(0, Math.ceil((room.phaseEndsAt! - Date.now()) / 1000));
       setTimeLeft(remaining);
+      return remaining;
+    };
+
+    updateTick();
+
+    const interval = setInterval(() => {
+      const remaining = updateTick();
 
       // Auto-advance if time runs out: Strictly Host client triggers to avoid clock-drift phase skipping
       if (remaining === 0 && !advanceTriggeredRef.current && room.currentPhase === 'ROLE_REVEAL') {

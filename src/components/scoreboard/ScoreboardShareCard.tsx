@@ -29,6 +29,7 @@ export const ScoreboardShareCard: React.FC<ScoreboardShareCardProps> = ({
   const isEn = lang === 'en';
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
+  const [shareError, setShareError] = useState<string | null>(null);
 
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
@@ -181,14 +182,29 @@ ${sortedPlayers.map((p, idx) => `${idx + 1}. ${p.name} - ${p.score} pts`).join('
 
 Play Dhappabaj (ধাপ্পাবাজ) now: ${window.location.origin}`;
 
+  const whatsAppShareUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
+  const facebookShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+    window.location.origin
+  )}&quote=${encodeURIComponent(
+    `🏆 Dhappabaj Match Champion: ${champion.name} with ${champion.score} points! Can you catch the imposter?`
+  )}`;
+
+  // Yield a frame so "Generating..." button state paints immediately before heavy Canvas 2D encoding
+  const yieldToPaint = () =>
+    new Promise<void>((resolve) => {
+      requestAnimationFrame(() => setTimeout(resolve, 0));
+    });
+
   // 1. Download Scoreboard Image
   const handleDownload = async () => {
     try {
       sound.playClick();
+      setShareError(null);
       setIsGenerating(true);
+      await yieldToPaint();
       const blob = await generateCardBlob();
       if (!blob) {
-        alert(isEn ? 'Failed to generate scoreboard image.' : 'ছবি তৈরি করা সম্ভব হয়নি।');
+        setShareError(isEn ? 'Failed to generate scoreboard image.' : 'ছবি তৈরি করা সম্ভব হয়নি।');
         return;
       }
 
@@ -202,32 +218,19 @@ Play Dhappabaj (ধাপ্পাবাজ) now: ${window.location.origin}`;
       setTimeout(() => URL.revokeObjectURL(url), 4000);
     } catch (err) {
       console.error('Download error:', err);
+      setShareError(isEn ? 'Could not download scoreboard image.' : 'ছবি ডাউনলোড করা যায়নি।');
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // 2. Share to WhatsApp
-  const handleWhatsAppShare = () => {
-    sound.playClick();
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
-    window.open(url, '_blank');
-  };
-
-  // 3. Share to Facebook
-  const handleFacebookShare = () => {
-    sound.playClick();
-    const shareUrl = encodeURIComponent(window.location.origin);
-    const quote = encodeURIComponent(`🏆 Dhappabaj Match Champion: ${champion.name} with ${champion.score} points! Can you catch the imposter?`);
-    const url = `https://www.facebook.com/sharer/sharer.php?u=${shareUrl}&quote=${quote}`;
-    window.open(url, '_blank', 'noopener,noreferrer,width=600,height=500');
-  };
-
   // 4. Native Web Share (Share image file directly to WhatsApp/Facebook/Instagram/Messenger on Mobile)
   const handleNativeShare = async () => {
     sound.playClick();
+    setShareError(null);
     setIsGenerating(true);
     try {
+      await yieldToPaint();
       const blob = await generateCardBlob();
       if (blob && navigator.share) {
         const file = new File([blob], `Dhappabaj_Scoreboard_${Date.now()}.png`, { type: 'image/png' });
@@ -349,29 +352,40 @@ Play Dhappabaj (ধাপ্পাবাজ) now: ${window.location.origin}`;
           </button>
         </div>
 
+        {/* Inline share error banner */}
+        {shareError && (
+          <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-semibold text-center">
+            {shareError}
+          </div>
+        )}
+
         {/* Social Direct Links: WhatsApp & Facebook & Copy */}
         <div className="grid grid-cols-3 gap-2 pt-1">
           {/* WhatsApp Direct */}
-          <button
-            type="button"
-            onClick={handleWhatsAppShare}
+          <a
+            href={whatsAppShareUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => sound.playClick()}
             className="py-2.5 px-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
             title={isEn ? 'Share to WhatsApp' : 'হোয়াটসঅ্যাপে শেয়ার'}
           >
             <MessageCircle className="w-4 h-4" />
             <span>WhatsApp</span>
-          </button>
+          </a>
 
           {/* Facebook Direct */}
-          <button
-            type="button"
-            onClick={handleFacebookShare}
+          <a
+            href={facebookShareUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => sound.playClick()}
             className="py-2.5 px-3 rounded-xl bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
             title={isEn ? 'Share to Facebook' : 'ফেসবুকে শেয়ার'}
           >
             <Facebook className="w-4 h-4" />
             <span>Facebook</span>
-          </button>
+          </a>
 
           {/* Copy Results Text */}
           <button

@@ -1,7 +1,7 @@
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { WordItem, CategoryId } from '../types/game';
-import { ALL_WORDS } from '../data/words';
+import { ALL_WORDS, invalidateWordPoolCache } from '../data/words';
 import { OnlineRoomData, OnlinePlayer } from '../types/multiplayer';
 
 export const ADMIN_AUTHORIZED_EMAIL = 'smsheam1@gmail.com';
@@ -103,6 +103,7 @@ export function saveLocalCustomWords(words: WordItem[]) {
   try {
     localStorage.setItem(CUSTOM_WORDS_STORAGE_KEY, JSON.stringify(words));
   } catch {}
+  invalidateWordPoolCache();
 }
 
 // Add or edit a word (saves locally and to Firestore game_config/custom_words for all players)
@@ -153,19 +154,27 @@ export function getCombinedWordPool(): WordItem[] {
   return [...customWords, ...ALL_WORDS];
 }
 
+let cachedQuickChats: CustomQuickChats | null = null;
+
 // Quick Chats management
 export function getCustomQuickChats(): CustomQuickChats {
+  if (cachedQuickChats) return cachedQuickChats;
   try {
     const raw = localStorage.getItem(QUICK_CHATS_STORAGE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed.suspect && parsed.defense && parsed.fun) return parsed;
+      const parsed = JSON.parse(raw) as CustomQuickChats;
+      if (parsed && parsed.suspect && parsed.defense && parsed.fun) {
+        cachedQuickChats = parsed;
+        return parsed;
+      }
     }
   } catch {}
-  return DEFAULT_QUICK_CHATS;
+  cachedQuickChats = DEFAULT_QUICK_CHATS;
+  return cachedQuickChats;
 }
 
 export function saveCustomQuickChats(chats: CustomQuickChats) {
+  cachedQuickChats = chats;
   try {
     localStorage.setItem(QUICK_CHATS_STORAGE_KEY, JSON.stringify(chats));
   } catch {}

@@ -53,22 +53,36 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
     return Math.max(0, Math.ceil((room.phaseEndsAt - Date.now()) / 1000));
   });
 
+  const submittingRef = React.useRef<boolean>(false);
+
   useEffect(() => {
     if (!room.phaseEndsAt) return;
 
-    const interval = setInterval(() => {
+    const syncTimer = () => {
       const remaining = Math.max(0, Math.ceil((room.phaseEndsAt! - Date.now()) / 1000));
       setTimeLeft(remaining);
+      return remaining;
+    };
+
+    syncTimer();
+
+    const interval = setInterval(() => {
+      const remaining = syncTimer();
 
       if (remaining <= 5 && remaining > 0) {
         sound.playTimerTick();
       }
 
-      // If time expires for current turn: strictly the active player or host advances
+      // If time expires for current turn: active player advances immediately, host acts after 1s grace
       if (remaining === 0 && !hasTimedOut) {
-        if (isMyTurn || currentPlayer.isHost) {
+        if (isMyTurn) {
           setHasTimedOut(true);
           advanceOnlineClueTurn(room.roomCode, currentTurnPlayerId || undefined);
+        } else if (currentPlayer.isHost) {
+          setHasTimedOut(true);
+          setTimeout(() => {
+            advanceOnlineClueTurn(room.roomCode, currentTurnPlayerId || undefined);
+          }, 1200);
         }
       }
     }, 1000);
@@ -79,20 +93,24 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
   // Reset timeout guard when active turn changes
   useEffect(() => {
     setHasTimedOut(false);
+    submittingRef.current = false;
   }, [currentTurnPlayerId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clueInput.trim() || submitting || !isMyTurn) return;
+    const trimmed = clueInput.trim();
+    if (!trimmed || submitting || submittingRef.current || !isMyTurn) return;
 
+    submittingRef.current = true;
     setSubmitting(true);
     sound.playClick();
     try {
-      await submitOnlineClue(room.roomCode, clueInput.trim());
+      await submitOnlineClue(room.roomCode, trimmed);
       setClueInput('');
     } catch (err) {
       console.error(err);
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -187,7 +205,7 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
                 <span>{isEn ? 'IT IS YOUR TURN NOW!' : 'এখন আপনার ক্লু দেওয়ার পালা!'}</span>
               </div>
               <span className="text-xs font-mono font-bold bg-amber-500 text-slate-950 px-2.5 py-0.5 rounded-full">
-                {timeLeft}s বাকি
+                {isEn ? `${timeLeft}s left` : `${timeLeft}s বাকি`}
               </span>
             </div>
 
@@ -202,12 +220,6 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
               />
               <button
                 type="submit"
-                onPointerDown={(e) => {
-                  // Ensure immediate trigger on mobile without requiring blur tap
-                  if (clueInput.trim() && !submitting && isMyTurn) {
-                    handleSubmit(e);
-                  }
-                }}
                 disabled={submitting || !clueInput.trim()}
                 className="px-6 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all active:scale-95"
               >
@@ -219,11 +231,13 @@ export const OnlineClueScreen: React.FC<OnlineClueScreenProps> = ({
             {/* Secret Identity Reminder for Active Player */}
             <div className="p-2.5 rounded-xl bg-white/70 dark:bg-slate-900/80 border border-amber-500/30 text-xs">
               {privateRole?.role === 'imposter' ? (
-                <div className="text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1.5">
+                <div className="text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1.5 flex-wrap">
                   <span>🕵️</span>
                   <span>{isEn ? 'Imposter Hint: ' : 'ধাপ্পাবাজ ইঙ্গিত: '}</span>
                   <span className="underline">
-                    {privateRole.shortHintBn || privateRole.hintBn || 'ক্যাটাগরি সম্পর্কিত'}
+                    {isEn
+                      ? privateRole.shortHintEn || privateRole.hintEn || 'Related to category'
+                      : privateRole.shortHintBn || privateRole.hintBn || 'ক্যাটাগরি সম্পর্কিত'}
                   </span>
                   <span className="text-[10px] text-slate-400 font-normal">
                     ({isEn ? 'Blend in with others' : 'অন্যদের ক্লু লক্ষ্য করে মিল রাখুন'})

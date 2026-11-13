@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import {
   ShieldCheck,
   X,
@@ -8,81 +8,50 @@ import {
   RefreshCw,
   Search,
   BookOpen,
-  MessageSquare,
-  Activity,
-  Layers,
   AlertTriangle,
-  FileText,
   Lock,
-  Unlock,
   CheckCircle,
   Database,
   Users,
-  Clock,
-  ExternalLink,
-  ChevronRight,
   TrendingUp,
   Download,
   Upload,
-  UserCheck,
-  UserX,
-  Sliders,
-  Award,
-  Sparkles,
   Eye,
-  Check,
-  HelpCircle,
 } from 'lucide-react';
 import { Language, Theme, WordItem, CategoryId } from '../../types/game';
 import { OnlineRoomData } from '../../types/multiplayer';
 import { UserProfile, CompletedMatchRecord, UserRoleRecord, EditorPermission } from '../../types/user';
 import {
   ADMIN_AUTHORIZED_EMAIL,
-  ADMIN_MASTER_PASSCODE,
   isUserAdmin,
   unlockAdminWithPasscode,
   lockAdminSession,
   getLocalCustomWords,
   addOrUpdateWord,
   deleteWord,
-  getCustomQuickChats,
-  saveCustomQuickChats,
-  CustomQuickChats,
-  DEFAULT_QUICK_CHATS,
   fetchLiveRooms,
   closeRoomByAdmin,
-  deleteRoomByAdmin,
   pingFirestoreLatency,
   getSystemLogs,
-  clearSystemLogs,
   SystemLogEntry,
 } from '../../services/adminService';
 import { fetchUsersForAdmin, setUserBanStatus } from '../../services/userService';
 import { fetchRecentMatches } from '../../services/matchHistoryService';
 import {
   isOwnerEmail,
-  getUserRole,
   assignEditor,
   revokeEditor,
   fetchAllEditors,
   DEFAULT_EDITOR_PERMISSIONS,
 } from '../../services/roleService';
 import {
-  GameScoringConfig,
-  DEFAULT_SCORING_CONFIG,
-  getActiveScoringConfig,
-  saveActiveScoringConfig,
-} from '../../utils/scoring';
-import {
-  ALL_WORDS,
   getFullWordPool,
   saveWordOverride,
   saveDeletedWordId,
   bulkDeleteWords,
   bulkUpdateCategory,
 } from '../../data/words';
-import { auth, signInWithGoogle, db } from '../../firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { auth, signInWithGoogle } from '../../firebase';
 import { sound } from '../../utils/audio';
 
 interface AdminDashboardModalProps {
@@ -134,7 +103,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   // Words management state
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [visibleLimit, setVisibleLimit] = useState<number>(50);
   const [customWords, setCustomWords] = useState<WordItem[]>(() => getLocalCustomWords());
   const [isAddingWord, setIsAddingWord] = useState<boolean>(false);
   const [newWordBn, setNewWordBn] = useState<string>('');
@@ -145,17 +116,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [editingWordId, setEditingWordId] = useState<number | null>(null);
   const [previewWord, setPreviewWord] = useState<WordItem | null>(null);
 
-  // Quick chats & content state
-  const [quickChats, setQuickChats] = useState<CustomQuickChats>(() => getCustomQuickChats());
-  const [chatCategory, setChatCategory] = useState<'suspect' | 'defense' | 'fun'>('suspect');
-  const [newChatBn, setNewChatBn] = useState<string>('');
-  const [newChatEn, setNewChatEn] = useState<string>('');
-  const [gameAnnouncement, setGameAnnouncement] = useState<string>('স্বাগতম ধাপ্পাবাজে! চতুর আলোচনা করুন এবং ধাপ্পাবাজকে চিহ্নিত করুন।');
+  // Non-blocking inline notice & confirmation modal state (replaces window.alert / window.confirm)
+  const [adminNotice, setAdminNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null);
 
-  // Scoring management state
-  const [scoringConfig, setScoringConfig] = useState<GameScoringConfig>(() => getActiveScoringConfig());
-  const [showScoringConfirm, setShowScoringConfirm] = useState<boolean>(false);
-  const [scoringSaveSuccess, setScoringSaveSuccess] = useState<boolean>(false);
+  const showNotice = (text: string, type: 'success' | 'error' = 'success') => {
+    setAdminNotice({ type, text });
+    setTimeout(() => {
+      setAdminNotice((prev) => (prev?.text === text ? null : prev));
+    }, 4000);
+  };
 
   // Live rooms state
   const [liveRooms, setLiveRooms] = useState<OnlineRoomData[]>([]);
@@ -271,39 +241,47 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   const allWordsPool = useMemo(() => getFullWordPool(), [customWords, wordsVersion]);
 
-  // Duplicate words detection
-  const duplicateWords = useMemo(() => {
-    const seen = new Map<string, number>();
-    const dupes: string[] = [];
-    allWordsPool.forEach((w) => {
-      const keyBn = w.wordBn.trim().toLowerCase();
-      const count = seen.get(keyBn) || 0;
-      seen.set(keyBn, count + 1);
-      if (count === 1) dupes.push(w.wordBn);
-    });
-    return dupes;
+  // Precomputed category counts for Overview tab
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const w of allWordsPool) {
+      counts[w.category] = (counts[w.category] || 0) + 1;
+    }
+    return counts;
   }, [allWordsPool]);
 
-  // Filtered words
+  // Reset pagination when filters change
+  useEffect(() => {
+    setVisibleLimit(50);
+  }, [deferredSearchQuery, selectedCategory]);
+
+  // Precomputed Set for O(1) selection lookups in word rows
+  const selectedWordIdSet = useMemo(() => new Set(selectedWordIds), [selectedWordIds]);
+
+  // Filtered words (uses deferred search query so typing never blocks paint)
   const filteredWords = useMemo(() => {
+    const query = deferredSearchQuery.trim().toLowerCase();
+    const customIdSet = selectedCategory === 'custom' ? new Set(customWords.map((cw) => cw.id)) : null;
+
     return allWordsPool.filter((w) => {
       const matchesSearch =
-        searchQuery.trim() === '' ||
-        w.wordBn.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        w.wordEn.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (w.hintBn && w.hintBn.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (w.hintEn && w.hintEn.toLowerCase().includes(searchQuery.toLowerCase()));
+        query === '' ||
+        w.wordBn.toLowerCase().includes(query) ||
+        w.wordEn.toLowerCase().includes(query) ||
+        (w.hintBn && w.hintBn.toLowerCase().includes(query)) ||
+        (w.hintEn && w.hintEn.toLowerCase().includes(query));
 
-      let matchesCat = true;
-      if (selectedCategory === 'custom') {
-        matchesCat = customWords.some((cw) => cw.id === w.id);
-      } else if (selectedCategory !== 'all') {
-        matchesCat = w.category === selectedCategory;
+      if (!matchesSearch) return false;
+
+      if (selectedCategory === 'custom' && customIdSet) {
+        return customIdSet.has(w.id);
       }
-
-      return matchesSearch && matchesCat;
+      if (selectedCategory !== 'all') {
+        return w.category === selectedCategory;
+      }
+      return true;
     });
-  }, [allWordsPool, searchQuery, selectedCategory, customWords]);
+  }, [allWordsPool, deferredSearchQuery, selectedCategory, customWords]);
 
   // Select all / Deselect all filtered words
   const handleToggleSelectAllWords = () => {
@@ -317,11 +295,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   const handleToggleWordSelect = (id: number) => {
     sound.playClick();
-    if (selectedWordIds.includes(id)) {
-      setSelectedWordIds(selectedWordIds.filter((item) => item !== id));
-    } else {
-      setSelectedWordIds([...selectedWordIds, id]);
-    }
+    setSelectedWordIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
   };
 
   // Edit any existing word (pack or custom)
@@ -340,7 +316,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const handleSaveWord = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newWordBn.trim() || !newWordEn.trim() || !newHintBn.trim()) {
-      alert(isEn ? 'Please fill in required fields' : 'সবগুলো ফিল্ড পূরণ করুন');
+      showNotice(isEn ? 'Please fill in required fields' : 'সবগুলো ফিল্ড পূরণ করুন', 'error');
       return;
     }
 
@@ -373,29 +349,39 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     setNewWordEn('');
     setNewHintBn('');
     setNewHintEn('');
+    showNotice(isEn ? 'Word saved successfully!' : 'শব্দ সফলভাবে সংরক্ষণ করা হয়েছে!');
   };
 
   const handleDeleteWord = (id: number) => {
-    if (confirm(isEn ? 'Are you sure you want to remove this word from the game?' : 'আপনি কি নিশ্চিত যে এই শব্দটি খেলা থেকে মুছতে চান?')) {
-      sound.playClick();
-      deleteWord(id);
-      saveDeletedWordId(id);
-      setSelectedWordIds((prev) => prev.filter((i) => i !== id));
-      setCustomWords(getLocalCustomWords());
-      setWordsVersion((v) => v + 1);
-    }
+    setPendingConfirm({
+      message: isEn ? 'Are you sure you want to remove this word from the game?' : 'আপনি কি নিশ্চিত যে এই শব্দটি খেলা থেকে মুছতে চান?',
+      onConfirm: () => {
+        sound.playClick();
+        deleteWord(id);
+        saveDeletedWordId(id);
+        setSelectedWordIds((prev) => prev.filter((i) => i !== id));
+        setCustomWords(getLocalCustomWords());
+        setWordsVersion((v) => v + 1);
+        showNotice(isEn ? 'Word removed.' : 'শব্দটি মুছে ফেলা হয়েছে।');
+      },
+    });
   };
 
   const handleBulkDelete = () => {
     if (selectedWordIds.length === 0) return;
-    if (confirm(isEn ? `Delete ${selectedWordIds.length} selected words?` : `নির্বাচিত ${selectedWordIds.length}টি শব্দ মুছবেন?`)) {
-      sound.playClick();
-      bulkDeleteWords(selectedWordIds);
-      selectedWordIds.forEach((id) => deleteWord(id));
-      setSelectedWordIds([]);
-      setCustomWords(getLocalCustomWords());
-      setWordsVersion((v) => v + 1);
-    }
+    const count = selectedWordIds.length;
+    setPendingConfirm({
+      message: isEn ? `Delete ${count} selected words?` : `নির্বাচিত ${count}টি শব্দ মুছবেন?`,
+      onConfirm: () => {
+        sound.playClick();
+        bulkDeleteWords(selectedWordIds);
+        selectedWordIds.forEach((id) => deleteWord(id));
+        setSelectedWordIds([]);
+        setCustomWords(getLocalCustomWords());
+        setWordsVersion((v) => v + 1);
+        showNotice(isEn ? `${count} words deleted.` : `${count}টি শব্দ মুছে ফেলা হয়েছে।`);
+      },
+    });
   };
 
   const handleBulkChangeCategory = (cat: CategoryId) => {
@@ -465,50 +451,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           }
         }
         setCustomWords(getLocalCustomWords());
-        alert(isEn ? `Successfully imported ${count} words!` : `সফলভাবে ${count}টি শব্দ ইমপোর্ট করা হয়েছে!`);
+        setWordsVersion((v) => v + 1);
+        showNotice(isEn ? `Successfully imported ${count} words!` : `সফলভাবে ${count}টি শব্দ ইমপোর্ট করা হয়েছে!`);
       } catch {
-        alert(isEn ? 'Failed to parse CSV file' : 'CSV ফাইল পড়তে ব্যর্থ হয়েছে');
+        showNotice(isEn ? 'Failed to parse CSV file' : 'CSV ফাইল পড়তে ব্যর্থ হয়েছে', 'error');
       }
     };
     reader.readAsText(file);
-  };
-
-  // Quick Chat save
-  const handleAddChat = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newChatBn.trim()) return;
-
-    sound.playClick();
-    const updated = { ...quickChats };
-    updated[chatCategory].unshift({
-      bn: newChatBn.trim(),
-      en: newChatEn.trim() || newChatBn.trim(),
-    });
-    setQuickChats(updated);
-    saveCustomQuickChats(updated);
-    setNewChatBn('');
-    setNewChatEn('');
-  };
-
-  const handleDeleteChat = (category: 'suspect' | 'defense' | 'fun', index: number) => {
-    sound.playClick();
-    const updated = { ...quickChats };
-    updated[category].splice(index, 1);
-    setQuickChats(updated);
-    saveCustomQuickChats(updated);
-  };
-
-  // Scoring save
-  const handleSaveScoringConfig = async () => {
-    sound.playClick();
-    saveActiveScoringConfig(scoringConfig);
-    try {
-      const configRef = doc(db, 'game_config', 'scoring_rules');
-      await setDoc(configRef, scoringConfig, { merge: true });
-    } catch {}
-    setShowScoringConfirm(false);
-    setScoringSaveSuccess(true);
-    setTimeout(() => setScoringSaveSuccess(false), 3000);
   };
 
   // Assign Editor
@@ -520,14 +469,19 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     setNewEditorEmail('');
     setNewEditorName('');
     loadEditors();
+    showNotice(isEn ? 'Editor authorized.' : 'এডিটর অনুমোদন দেওয়া হয়েছে।');
   };
 
-  const handleRevokeEditor = async (id: string) => {
-    if (confirm(isEn ? 'Revoke editor access for this account?' : 'এই অ্যাকাউন্টের এডিটর ক্ষমতা বাতিল করবেন?')) {
-      sound.playClick();
-      await revokeEditor(id);
-      loadEditors();
-    }
+  const handleRevokeEditor = (id: string) => {
+    setPendingConfirm({
+      message: isEn ? 'Revoke editor access for this account?' : 'এই অ্যাকাউন্টের এডিটর ক্ষমতা বাতিল করবেন?',
+      onConfirm: async () => {
+        sound.playClick();
+        await revokeEditor(id);
+        loadEditors();
+        showNotice(isEn ? 'Editor access revoked.' : 'এডিটর ক্ষমতা বাতিল করা হয়েছে।');
+      },
+    });
   };
 
   // User Ban / Unban
@@ -548,8 +502,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-150">
-      <div className="w-full max-w-5xl h-[92vh] max-h-[900px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/90 animate-in fade-in duration-150">
+      <div className="w-full max-w-5xl h-[92vh] max-h-[900px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden relative">
         {/* Header Bar */}
         <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-950/70">
           <div className="flex items-center gap-3">
@@ -679,6 +633,23 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               ))}
             </div>
 
+            {/* Inline Notice Banner */}
+            {adminNotice && (
+              <div
+                className={`mx-4 mt-3 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-between border ${
+                  adminNotice.type === 'error'
+                    ? 'bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400'
+                    : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  {adminNotice.type === 'error' ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                  {adminNotice.text}
+                </span>
+                <button type="button" onClick={() => setAdminNotice(null)} className="cursor-pointer opacity-70 hover:opacity-100">✕</button>
+              </div>
+            )}
+
             {/* TAB 1: OVERVIEW */}
             {activeTab === 'overview' && (
               <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-5">
@@ -743,7 +714,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </h4>
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       {Object.entries(CATEGORY_LABELS).slice(2, 10).map(([k, label]) => {
-                        const count = allWordsPool.filter((w) => w.category === k).length;
+                        const count = categoryCounts[k] || 0;
                         return (
                           <div key={k} className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex justify-between">
                             <span className="truncate">{isEn ? label.en : label.bn}</span>
@@ -980,8 +951,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   </div>
 
                   <div className="max-h-96 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60">
-                    {filteredWords.slice(0, 150).map((w) => {
-                      const isSelected = selectedWordIds.includes(w.id);
+                    {filteredWords.slice(0, visibleLimit).map((w) => {
+                      const isSelected = selectedWordIdSet.has(w.id);
                       return (
                         <div
                           key={w.id}
@@ -1043,12 +1014,29 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         </div>
                       );
                     })}
+
+                    {filteredWords.length > visibleLimit && (
+                      <div className="p-3 text-center bg-slate-50 dark:bg-slate-950/60">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            sound.playClick();
+                            setVisibleLimit((prev) => prev + 50);
+                          }}
+                          className="px-4 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 font-bold text-xs cursor-pointer transition-colors"
+                        >
+                          {isEn
+                            ? `Show More (+50 of ${filteredWords.length - visibleLimit} remaining)`
+                            : `আরও দেখুন (+৫০টি, বাকি ${filteredWords.length - visibleLimit}টি)`}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Word Card Preview Modal */}
                 {previewWord && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85">
                     <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4 text-center">
                       <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
                         <span className="text-xs font-bold uppercase text-slate-500">Live Word Card Preview</span>
@@ -1108,10 +1096,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           <button
                             type="button"
                             onClick={() => {
-                              if (confirm(`Close room ${r.roomCode}?`)) {
-                                closeRoomByAdmin(r.roomCode);
-                                setLiveRooms((prev) => prev.filter((rm) => rm.roomCode !== r.roomCode));
-                              }
+                              setPendingConfirm({
+                                message: isEn ? `Close room ${r.roomCode}?` : `রুম ${r.roomCode} বন্ধ করবেন?`,
+                                onConfirm: () => {
+                                  closeRoomByAdmin(r.roomCode);
+                                  setLiveRooms((prev) => prev.filter((rm) => rm.roomCode !== r.roomCode));
+                                  showNotice(isEn ? `Room ${r.roomCode} closed.` : `রুম ${r.roomCode} বন্ধ করা হয়েছে।`);
+                                },
+                              });
                             }}
                             className="p-1.5 rounded-lg bg-rose-500/15 text-rose-500 hover:bg-rose-500 hover:text-white cursor-pointer"
                             title="Terminate Room"
@@ -1347,6 +1339,38 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             )}
 
 
+          </div>
+        )}
+
+        {/* Non-blocking In-Modal Confirmation Dialog */}
+        {pendingConfirm && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-950/85">
+            <div className="w-full max-w-sm p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 text-center">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-500/15 text-rose-500 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-bold text-slate-900 dark:text-white">{pendingConfirm.message}</p>
+              <div className="grid grid-cols-2 gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setPendingConfirm(null)}
+                  className="py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs cursor-pointer"
+                >
+                  {isEn ? 'Cancel' : 'বাতিল'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const action = pendingConfirm.onConfirm;
+                    setPendingConfirm(null);
+                    action();
+                  }}
+                  className="py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs cursor-pointer"
+                >
+                  {isEn ? 'Confirm' : 'নিশ্চিত করুন'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

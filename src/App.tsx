@@ -399,46 +399,56 @@ export default function App() {
 
   return (
     <div className="bg-slate-50 dark:bg-slate-950 min-h-screen text-slate-900 dark:text-slate-100 selection:bg-amber-500/30 transition-colors duration-200">
-      {/* Rules & Admin Modals */}
-      <RulesModal isOpen={isRulesOpen} onClose={() => setIsRulesOpen(false)} lang={lang} />
-      <AdminDashboardModal isOpen={isAdminOpen} onClose={() => setIsAdminOpen(false)} lang={lang} theme={theme} />
+      {/* Rules & Admin Modals (conditionally mounted when open to avoid heavy startup work) */}
+      {isRulesOpen && (
+        <RulesModal isOpen={isRulesOpen} onClose={() => setIsRulesOpen(false)} lang={lang} />
+      )}
+      {isAdminOpen && (
+        <AdminDashboardModal isOpen={isAdminOpen} onClose={() => setIsAdminOpen(false)} lang={lang} theme={theme} />
+      )}
 
       {/* Profile & Customization Modal */}
-      <ProfileModal
-        isOpen={isProfileOpen}
-        onClose={() => setIsProfileOpen(false)}
-        userProfile={userProfile}
-        onProfileUpdated={(updated) => setUserProfile(updated)}
-        onSignOut={handleSignOut}
-        lang={lang}
-        theme={theme}
-      />
+      {isProfileOpen && (
+        <ProfileModal
+          isOpen={isProfileOpen}
+          onClose={() => setIsProfileOpen(false)}
+          userProfile={userProfile}
+          onProfileUpdated={(updated) => setUserProfile(updated)}
+          onSignOut={handleSignOut}
+          lang={lang}
+          theme={theme}
+        />
+      )}
 
       {/* Auth Prompt Modal (only when user clicks Sign In) */}
-      <AuthPromptModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        canDismiss={!!userProfile}
-        onAuthenticated={(prof) => {
-          setUserProfile(prof);
-          setIsAuthModalOpen(false);
-        }}
-        lang={lang}
-        theme={theme}
-      />
+      {isAuthModalOpen && (
+        <AuthPromptModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          canDismiss={!!userProfile}
+          onAuthenticated={(prof) => {
+            setUserProfile(prof);
+            setIsAuthModalOpen(false);
+          }}
+          lang={lang}
+          theme={theme}
+        />
+      )}
 
       {/* Global Settings Modal */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        lang={lang}
-        onToggleLang={handleToggleLang}
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
-        isMuted={isMuted}
-        onToggleMute={handleToggleMute}
-        onOpenRules={() => setIsRulesOpen(true)}
-      />
+      {isSettingsOpen && (
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          lang={lang}
+          onToggleLang={handleToggleLang}
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
+          isMuted={isMuted}
+          onToggleMute={handleToggleMute}
+          onOpenRules={() => setIsRulesOpen(true)}
+        />
+      )}
 
       {/* Online Multiplayer Active Game Container */}
       {onlineRoom && onlinePlayer ? (
@@ -484,18 +494,20 @@ export default function App() {
           )}
 
           {/* Online Room Modal */}
-          <OnlineJoinCreateModal
-            isOpen={isOnlineModalOpen}
-            onClose={() => setIsOnlineModalOpen(false)}
-            lang={lang}
-            theme={theme}
-            initialRoomCode={inviteCode}
-            onRoomJoined={(roomData, player) => {
-              setOnlineRoom(roomData);
-              setOnlinePlayer(player);
-              setIsOnlineModalOpen(false);
-            }}
-          />
+          {isOnlineModalOpen && (
+            <OnlineJoinCreateModal
+              isOpen={isOnlineModalOpen}
+              onClose={() => setIsOnlineModalOpen(false)}
+              lang={lang}
+              theme={theme}
+              initialRoomCode={inviteCode}
+              onRoomJoined={(roomData, player) => {
+                setOnlineRoom(roomData);
+                setOnlinePlayer(player);
+                setIsOnlineModalOpen(false);
+              }}
+            />
+          )}
 
       {phase === 'SETUP' && (
         <SetupScreen

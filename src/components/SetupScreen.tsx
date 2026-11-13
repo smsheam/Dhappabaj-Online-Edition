@@ -461,7 +461,6 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                       type="text"
                       value={name}
                       maxLength={16}
-                      onKeyDown={() => sound.playKeySound()}
                       onChange={(e) => {
                         sound.playKeySound();
                         handleNameChange(index, e.target.value);

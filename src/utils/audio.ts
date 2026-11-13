@@ -2,6 +2,28 @@ class SoundManager {
   private ctx: AudioContext | null = null;
   private isMuted: boolean = false;
   private masterGain: GainNode | null = null;
+  private lastKeySoundAt: number = 0;
+  private lastClickSoundAt: number = 0;
+  private unlockBound: boolean = false;
+
+  constructor() {
+    this.bindPassiveUnlock();
+  }
+
+  private bindPassiveUnlock() {
+    if (typeof window === 'undefined' || this.unlockBound) return;
+    this.unlockBound = true;
+    const unlock = () => {
+      // Defer actual AudioContext instantiation slightly so the triggering click/tap paints first
+      setTimeout(() => {
+        this.initContext();
+      }, 0);
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+    window.addEventListener('pointerdown', unlock, { passive: true, once: true });
+    window.addEventListener('keydown', unlock, { passive: true, once: true });
+  }
 
   private initContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
@@ -17,9 +39,26 @@ class SoundManager {
       }
     }
     if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {});
     }
     return this.ctx;
+  }
+
+  /**
+   * Yields to the browser paint pipeline before constructing Web Audio oscillator graphs.
+   * Prevents event handlers from blocking Interaction to Next Paint (INP).
+   */
+  private scheduleAudio(fn: (ctx: AudioContext, masterGain: GainNode) => void) {
+    if (this.isMuted || typeof window === 'undefined') return;
+    setTimeout(() => {
+      try {
+        const ctx = this.initContext();
+        if (!ctx || !this.masterGain) return;
+        fn(ctx, this.masterGain);
+      } catch {
+        // AudioContext interaction safeguard
+      }
+    }, 0);
   }
 
   public setMuted(muted: boolean) {
@@ -35,12 +74,14 @@ class SoundManager {
     return this.isMuted;
   }
 
-  // Tactile Mechanical Key / Typing sound
+  // Tactile Mechanical Key / Typing sound (throttled & deferred for zero typing INP lag)
   public playKeySound() {
     if (this.isMuted) return;
-    try {
-      const ctx = this.initContext();
-      if (!ctx || !this.masterGain) return;
+    const nowMs = performance.now();
+    if (nowMs - this.lastKeySoundAt < 40) return;
+    this.lastKeySoundAt = nowMs;
+
+    this.scheduleAudio((ctx, masterGain) => {
       const now = ctx.currentTime;
 
       // High click transient
@@ -54,7 +95,7 @@ class SoundManager {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
 
       osc.connect(gain);
-      gain.connect(this.masterGain);
+      gain.connect(masterGain);
 
       osc.start(now);
       osc.stop(now + 0.035);
@@ -70,21 +111,21 @@ class SoundManager {
       lowGain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
 
       lowOsc.connect(lowGain);
-      lowGain.connect(this.masterGain);
+      lowGain.connect(masterGain);
 
       lowOsc.start(now);
       lowOsc.stop(now + 0.04);
-    } catch {
-      // AudioContext interaction safeguard
-    }
+    });
   }
 
-  // Crisp loud button tap / tick
+  // Crisp loud button tap / tick (throttled & deferred for zero INP blocking)
   public playClick() {
     if (this.isMuted) return;
-    try {
-      const ctx = this.initContext();
-      if (!ctx || !this.masterGain) return;
+    const nowMs = performance.now();
+    if (nowMs - this.lastClickSoundAt < 25) return;
+    this.lastClickSoundAt = nowMs;
+
+    this.scheduleAudio((ctx, masterGain) => {
       const now = ctx.currentTime;
 
       const osc = ctx.createOscillator();
@@ -97,21 +138,16 @@ class SoundManager {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
 
       osc.connect(gain);
-      gain.connect(this.masterGain);
+      gain.connect(masterGain);
 
       osc.start(now);
       osc.stop(now + 0.06);
-    } catch {
-      // AudioContext safeguard
-    }
+    });
   }
 
   // Loud card swoosh / flip sound
   public playCardFlip() {
-    if (this.isMuted) return;
-    try {
-      const ctx = this.initContext();
-      if (!ctx || !this.masterGain) return;
+    this.scheduleAudio((ctx, masterGain) => {
       const now = ctx.currentTime;
 
       const osc = ctx.createOscillator();
@@ -125,21 +161,16 @@ class SoundManager {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
 
       osc.connect(gain);
-      gain.connect(this.masterGain);
+      gain.connect(masterGain);
 
       osc.start(now);
       osc.stop(now + 0.18);
-    } catch {
-      // Ignore
-    }
+    });
   }
 
   // Terrifying, dramatic horror suspense chord when imposter is revealed
   public playSuspenseReveal() {
-    if (this.isMuted) return;
-    try {
-      const ctx = this.initContext();
-      if (!ctx || !this.masterGain) return;
+    this.scheduleAudio((ctx, masterGain) => {
       const now = ctx.currentTime;
 
       // 1. Deep Sub-Bass Impact Boom (Earth-shaking drop)
@@ -153,14 +184,13 @@ class SoundManager {
       subGain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
 
       subOsc.connect(subGain);
-      subGain.connect(this.masterGain);
+      subGain.connect(masterGain);
       subOsc.start(now);
       subOsc.stop(now + 1.2);
 
       // 2. Dissonant Horror Stinger Chords (Minor 2nd / Tritone cluster: C, C#, Eb, F#)
       const scaryFreqs = [130.81, 138.59, 155.56, 185.0, 261.63, 277.18];
       scaryFreqs.forEach((freq, idx) => {
-        if (!ctx || !this.masterGain) return;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = idx % 2 === 0 ? 'sawtooth' : 'triangle';
@@ -173,26 +203,20 @@ class SoundManager {
         gain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
 
         osc.connect(gain);
-        gain.connect(this.masterGain);
+        gain.connect(masterGain);
 
         osc.start(now);
         osc.stop(now + 1.8);
       });
-    } catch {
-      // AudioContext safeguard
-    }
+    });
   }
 
   // Loud, celebratory victory fanfare
   public playSuccessChime() {
-    if (this.isMuted) return;
-    try {
-      const ctx = this.initContext();
-      if (!ctx || !this.masterGain) return;
+    this.scheduleAudio((ctx, masterGain) => {
       const now = ctx.currentTime;
       const notes = [523.25, 659.25, 783.99, 1046.5, 1318.51]; // C5, E5, G5, C6, E6
       notes.forEach((freq, idx) => {
-        if (!ctx || !this.masterGain) return;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
@@ -202,26 +226,20 @@ class SoundManager {
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.07 + 0.45);
 
         osc.connect(gain);
-        gain.connect(this.masterGain);
+        gain.connect(masterGain);
 
         osc.start(now + idx * 0.07);
         osc.stop(now + idx * 0.07 + 0.45);
       });
-    } catch {
-      // Ignore
-    }
+    });
   }
 
   // Loud punchy buzzer
   public playBuzzer() {
-    if (this.isMuted) return;
-    try {
-      const ctx = this.initContext();
-      if (!ctx || !this.masterGain) return;
+    this.scheduleAudio((ctx, masterGain) => {
       const now = ctx.currentTime;
 
       [130, 134].forEach((freq) => {
-        if (!ctx || !this.masterGain) return;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sawtooth';
@@ -232,22 +250,17 @@ class SoundManager {
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
 
         osc.connect(gain);
-        gain.connect(this.masterGain);
+        gain.connect(masterGain);
 
         osc.start(now);
         osc.stop(now + 0.35);
       });
-    } catch {
-      // Ignore
-    }
+    });
   }
 
   // Timer warning tick (louder and punchier)
   public playWarningTick() {
-    if (this.isMuted) return;
-    try {
-      const ctx = this.initContext();
-      if (!ctx || !this.masterGain) return;
+    this.scheduleAudio((ctx, masterGain) => {
       const now = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -258,13 +271,11 @@ class SoundManager {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
 
       osc.connect(gain);
-      gain.connect(this.masterGain);
+      gain.connect(masterGain);
 
       osc.start(now);
       osc.stop(now + 0.05);
-    } catch {
-      // Ignore
-    }
+    });
   }
 
   public playTimerTick() {
@@ -273,10 +284,7 @@ class SoundManager {
 
   // 3-second stage countdown tick with rising pitch
   public playCountdownTick(count: number = 3) {
-    if (this.isMuted) return;
-    try {
-      const ctx = this.initContext();
-      if (!ctx || !this.masterGain) return;
+    this.scheduleAudio((ctx, masterGain) => {
       const now = ctx.currentTime;
 
       const baseFreq = count === 1 ? 880 : count === 2 ? 720 : 580;
@@ -291,21 +299,16 @@ class SoundManager {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
 
       osc.connect(gain);
-      gain.connect(this.masterGain);
+      gain.connect(masterGain);
 
       osc.start(now);
       osc.stop(now + 0.14);
-    } catch {
-      // AudioContext safeguard
-    }
+    });
   }
 
   // Dynamic whoosh / gong transition into next stage
   public playTransitionWhoosh() {
-    if (this.isMuted) return;
-    try {
-      const ctx = this.initContext();
-      if (!ctx || !this.masterGain) return;
+    this.scheduleAudio((ctx, masterGain) => {
       const now = ctx.currentTime;
 
       // 1. Resonant bell chime
@@ -319,7 +322,7 @@ class SoundManager {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
 
       osc.connect(gain);
-      gain.connect(this.masterGain);
+      gain.connect(masterGain);
       osc.start(now);
       osc.stop(now + 0.6);
 
@@ -334,12 +337,10 @@ class SoundManager {
       subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
 
       sub.connect(subGain);
-      subGain.connect(this.masterGain);
+      subGain.connect(masterGain);
       sub.start(now);
       sub.stop(now + 0.5);
-    } catch {
-      // AudioContext safeguard
-    }
+    });
   }
 
   public playVoteCast() {
@@ -356,7 +357,8 @@ class SoundManager {
 
   // Procedural Suspense Background Music (BGM)
   private bgmGain: GainNode | null = null;
-  private bgmTimer: NodeJS.Timeout | null = null;
+  private bgmTimer: ReturnType<typeof setInterval> | null = null;
+  private bgmStartTimeout: ReturnType<typeof setTimeout> | null = null;
   private isBgmPlayingState: boolean = false;
   private currentChordIndex: number = 0;
 
@@ -369,71 +371,82 @@ class SoundManager {
   ];
 
   public startBackgroundMusic() {
-    if (this.isBgmPlayingState) return;
-    try {
-      const ctx = this.initContext();
-      if (!ctx) return;
+    if (this.isBgmPlayingState || this.isMuted) return;
+    this.isBgmPlayingState = true;
+    this.currentChordIndex = 0;
 
-      if (!this.bgmGain) {
-        this.bgmGain = ctx.createGain();
-        this.bgmGain.gain.setValueAtTime(0.12, ctx.currentTime);
-        if (this.masterGain) {
-          this.bgmGain.connect(this.masterGain);
-        } else {
-          this.bgmGain.connect(ctx.destination);
-        }
-      }
-
-      this.isBgmPlayingState = true;
-      this.currentChordIndex = 0;
-
-      const playChordPulse = () => {
-        if (!this.isBgmPlayingState || !this.ctx || !this.bgmGain) return;
-        const now = this.ctx.currentTime;
-        const chord = this.bgmChords[this.currentChordIndex % this.bgmChords.length];
-        this.currentChordIndex++;
-
-        // Soft sub-bass pad
-        const bassOsc = this.ctx.createOscillator();
-        const bassGain = this.ctx.createGain();
-        bassOsc.type = 'sine';
-        bassOsc.frequency.setValueAtTime(chord[0], now);
-
-        bassGain.gain.setValueAtTime(0.01, now);
-        bassGain.gain.linearRampToValueAtTime(0.2, now + 0.4);
-        bassGain.gain.exponentialRampToValueAtTime(0.001, now + 2.2);
-
-        bassOsc.connect(bassGain);
-        bassGain.connect(this.bgmGain);
-        bassOsc.start(now);
-        bassOsc.stop(now + 2.2);
-
-        // Gentle arpeggiated bells
-        chord.slice(1).forEach((freq, idx) => {
-          if (!this.ctx || !this.bgmGain) return;
-          const noteTime = now + idx * 0.28;
-          const osc = this.ctx.createOscillator();
-          const noteGain = this.ctx.createGain();
-
-          osc.type = 'triangle';
-          osc.frequency.setValueAtTime(freq, noteTime);
-
-          noteGain.gain.setValueAtTime(0.01, noteTime);
-          noteGain.gain.linearRampToValueAtTime(0.15, noteTime + 0.05);
-          noteGain.gain.exponentialRampToValueAtTime(0.001, noteTime + 0.6);
-
-          osc.connect(noteGain);
-          noteGain.connect(this.bgmGain);
-          osc.start(noteTime);
-          osc.stop(noteTime + 0.6);
-        });
-      };
-
-      playChordPulse();
-      this.bgmTimer = setInterval(playChordPulse, 2400);
-    } catch {
-      // AudioContext safeguard
+    if (this.bgmStartTimeout) {
+      clearTimeout(this.bgmStartTimeout);
+      this.bgmStartTimeout = null;
     }
+
+    // Defer AudioContext & oscillator initialization past the triggering UI event paint
+    this.bgmStartTimeout = setTimeout(() => {
+      this.bgmStartTimeout = null;
+      if (!this.isBgmPlayingState || this.isMuted) return;
+      try {
+        const ctx = this.initContext();
+        if (!ctx) return;
+
+        if (!this.bgmGain) {
+          this.bgmGain = ctx.createGain();
+          this.bgmGain.gain.setValueAtTime(0.12, ctx.currentTime);
+          if (this.masterGain) {
+            this.bgmGain.connect(this.masterGain);
+          } else {
+            this.bgmGain.connect(ctx.destination);
+          }
+        }
+
+        const playChordPulse = () => {
+          if (!this.isBgmPlayingState || this.isMuted || !this.ctx || !this.bgmGain) return;
+          const now = this.ctx.currentTime;
+          const chord = this.bgmChords[this.currentChordIndex % this.bgmChords.length];
+          this.currentChordIndex++;
+
+          // Soft sub-bass pad
+          const bassOsc = this.ctx.createOscillator();
+          const bassGain = this.ctx.createGain();
+          bassOsc.type = 'sine';
+          bassOsc.frequency.setValueAtTime(chord[0], now);
+
+          bassGain.gain.setValueAtTime(0.01, now);
+          bassGain.gain.linearRampToValueAtTime(0.2, now + 0.4);
+          bassGain.gain.exponentialRampToValueAtTime(0.001, now + 2.2);
+
+          bassOsc.connect(bassGain);
+          bassGain.connect(this.bgmGain);
+          bassOsc.start(now);
+          bassOsc.stop(now + 2.2);
+
+          // Gentle arpeggiated bells
+          chord.slice(1).forEach((freq, idx) => {
+            if (!this.ctx || !this.bgmGain) return;
+            const noteTime = now + idx * 0.28;
+            const osc = this.ctx.createOscillator();
+            const noteGain = this.ctx.createGain();
+
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, noteTime);
+
+            noteGain.gain.setValueAtTime(0.01, noteTime);
+            noteGain.gain.linearRampToValueAtTime(0.15, noteTime + 0.05);
+            noteGain.gain.exponentialRampToValueAtTime(0.001, noteTime + 0.6);
+
+            osc.connect(noteGain);
+            noteGain.connect(this.bgmGain);
+            osc.start(noteTime);
+            osc.stop(noteTime + 0.6);
+          });
+        };
+
+        playChordPulse();
+        if (this.bgmTimer) clearInterval(this.bgmTimer);
+        this.bgmTimer = setInterval(playChordPulse, 2400);
+      } catch {
+        // AudioContext safeguard
+      }
+    }, 30);
   }
 
   public stopBackgroundMusic() {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Vote, Clock, CheckCircle2, ArrowRight, UserCheck, Users } from 'lucide-react';
 import { Language, Theme } from '../../types/game';
 import { OnlinePlayer, OnlineRoomData, OnlineVote } from '../../types/multiplayer';
@@ -30,12 +30,22 @@ export const OnlineVotingScreen: React.FC<OnlineVotingScreenProps> = ({
   const [hasVoted, setHasVoted] = useState<boolean>(currentPlayer.hasVoted || false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [resolving, setResolving] = useState<boolean>(false);
+  const submittingRef = useRef<boolean>(false);
+  const resolvingRef = useRef<boolean>(false);
 
-  // Sync with Firestore player state and reset on new rounds
+  // Sync hasVoted with Firestore player state
   useEffect(() => {
     setHasVoted(currentPlayer.hasVoted || false);
+  }, [currentPlayer.hasVoted]);
+
+  // Reset selections & locks strictly on new round / voting phase change
+  useEffect(() => {
     setSelectedSuspectIds([]);
-  }, [currentPlayer.hasVoted, room.currentRound]);
+    submittingRef.current = false;
+    resolvingRef.current = false;
+    setResolving(false);
+    setIsSubmitting(false);
+  }, [room.currentRound, room.phaseEndsAt]);
 
   const handleToggleSuspect = (id: string) => {
     sound.playClick();
@@ -63,16 +73,23 @@ export const OnlineVotingScreen: React.FC<OnlineVotingScreenProps> = ({
   useEffect(() => {
     if (!room.phaseEndsAt) return;
 
-    const interval = setInterval(() => {
+    const updateTick = () => {
       const remaining = Math.max(0, Math.ceil((room.phaseEndsAt! - Date.now()) / 1000));
       setTimeLeft(remaining);
+      return remaining;
+    };
+
+    updateTick();
+
+    const interval = setInterval(() => {
+      const remaining = updateTick();
 
       if (remaining <= 5 && remaining > 0) {
         sound.playTimerTick();
       }
 
       // Automatically resolve results on timeout - strictly the host
-      if (remaining === 0 && !resolving) {
+      if (remaining === 0 && !resolvingRef.current) {
         if (isHost) {
           clearInterval(interval);
           handleResolveResults();
@@ -81,23 +98,26 @@ export const OnlineVotingScreen: React.FC<OnlineVotingScreenProps> = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [room.phaseEndsAt, resolving, isHost]);
+  }, [room.phaseEndsAt, isHost]);
 
   const votedCount = players.filter((p) => p.hasVoted).length;
   const allVoted = votedCount === players.length && players.length > 0;
 
   // Requirement 2: Wait 3 seconds on voting page after all players vote before transitioning!
   useEffect(() => {
-    if (isHost && allVoted && !resolving) {
+    if (isHost && allVoted && !resolvingRef.current) {
       const timer = setTimeout(() => {
-        handleResolveResults();
+        if (!resolvingRef.current) {
+          handleResolveResults();
+        }
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [allVoted, resolving, isHost]);
+  }, [allVoted, isHost]);
 
   const handleCastVote = async () => {
-    if (selectedSuspectIds.length === 0) return;
+    if (selectedSuspectIds.length === 0 || submittingRef.current) return;
+    submittingRef.current = true;
     setIsSubmitting(true);
     sound.playVoteCast();
     try {
@@ -105,18 +125,22 @@ export const OnlineVotingScreen: React.FC<OnlineVotingScreenProps> = ({
       setHasVoted(true);
     } catch (err) {
       console.error(err);
+      submittingRef.current = false;
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleResolveResults = async () => {
+    if (resolvingRef.current) return;
+    resolvingRef.current = true;
     setResolving(true);
     sound.playClick();
     try {
       await resolveOnlineVotingResults(room.roomCode);
     } catch (err) {
       console.error(err);
+      resolvingRef.current = false;
       setResolving(false);
     }
   };

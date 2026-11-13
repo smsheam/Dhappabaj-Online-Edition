@@ -68,7 +68,7 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(true);
   const [cooldownSeconds, setCooldownSeconds] = useState<number>(0);
-  const chatBottomRef = useRef<HTMLDivElement>(null);
+  const chatScrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const unsub = subscribeToChatMessages(room.roomCode, (messages) => {
@@ -78,8 +78,9 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
   }, [room.roomCode]);
 
   useEffect(() => {
-    if (chatMessages.length > 0) {
-      chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = chatScrollContainerRef.current;
+    if (container && chatMessages.length > 0) {
+      container.scrollTop = container.scrollHeight;
     }
   }, [chatMessages]);
 
@@ -441,7 +442,7 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
         {isChatOpen && (
           <div className="space-y-2 pt-1 border-t border-slate-100 dark:border-slate-800/80">
             {/* Messages Scroll Area - Strictly displays up to 3 messages */}
-            <div className="h-24 overflow-y-auto space-y-1.5 p-1 bg-slate-50 dark:bg-slate-950/70 rounded-xl text-xs">
+            <div ref={chatScrollContainerRef} className="h-24 overflow-y-auto space-y-1.5 p-1 bg-slate-50 dark:bg-slate-950/70 rounded-xl text-xs">
               {chatMessages.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-[11px] text-slate-400">
                   {isEn ? 'Tap a reaction below while waiting!' : 'অপেক্ষা করার সময় নিচের বাটনে ট্যাপ করুন!'}
@@ -471,7 +472,6 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
                   );
                 })
               )}
-              <div ref={chatBottomRef} />
             </div>
 
             {/* Quick Emoji Reaction Buttons */}
@@ -620,7 +620,6 @@ export const OnlineLobbyScreen: React.FC<OnlineLobbyScreenProps> = ({
                 value={renameValue}
                 onChange={(e) => setRenameValue(e.target.value)}
                 maxLength={20}
-                autoFocus
                 className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm font-semibold focus:outline-none focus:border-amber-500"
               />
               <div className="flex items-center justify-end gap-2">

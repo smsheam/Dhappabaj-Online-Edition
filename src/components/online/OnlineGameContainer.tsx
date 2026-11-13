@@ -116,8 +116,8 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
       window.removeEventListener('click', handleFirstUserInteraction);
       window.removeEventListener('keydown', handleFirstUserInteraction);
     };
-    window.addEventListener('click', handleFirstUserInteraction);
-    window.addEventListener('keydown', handleFirstUserInteraction);
+    window.addEventListener('click', handleFirstUserInteraction, { passive: true });
+    window.addEventListener('keydown', handleFirstUserInteraction, { passive: true });
 
     return () => {
       sound.stopBackgroundMusic();
@@ -358,7 +358,7 @@ export const OnlineGameContainer: React.FC<OnlineGameContainerProps> = ({
 
       {/* Requirement 6 & 10: Persistent Floating Status Bar during all active phases */}
       {room.currentPhase !== 'LOBBY' && (
-        <div className="fixed top-2 inset-x-2 sm:inset-x-6 z-40 flex items-center justify-between gap-2 p-2 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 shadow-lg text-xs transition-all">
+        <div className="fixed top-2 inset-x-2 sm:inset-x-6 z-40 flex items-center justify-between gap-2 p-2 rounded-2xl bg-white/95 dark:bg-slate-900/95 border border-slate-200/80 dark:border-slate-800/80 shadow-lg text-xs transition-colors">
           {/* Left: Player Profile & Live Score */}
           <div className="flex items-center gap-2 min-w-0">
             <div className={`w-7 h-7 rounded-lg ${currentPlayer.avatarColor || 'bg-amber-500'} flex items-center justify-center text-sm shrink-0`}>

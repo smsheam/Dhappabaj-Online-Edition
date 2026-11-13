@@ -69,26 +69,41 @@ export const ALL_WORDS: WordItem[] = [
 const GLOBAL_WORD_HISTORY_KEY = 'dhappabaj_global_word_history_v3';
 const MAX_RECENT_HISTORY = 2400; // Keep history of up to 2,400 words so 3,000 words rotate smoothly without repetition
 
+let cachedGlobalHistory: number[] | null = null;
+let cachedWordOverrides: Record<number, Partial<WordItem>> | null = null;
+let cachedDeletedWordIds: number[] | null = null;
+let cachedFullWordPool: WordItem[] | null = null;
+
+export function invalidateWordPoolCache() {
+  cachedFullWordPool = null;
+}
+
 function getGlobalHistory(): number[] {
+  if (cachedGlobalHistory) return cachedGlobalHistory;
   try {
     if (typeof localStorage !== 'undefined') {
       const stored = localStorage.getItem(GLOBAL_WORD_HISTORY_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          cachedGlobalHistory = parsed;
+          return cachedGlobalHistory;
+        }
       }
     }
   } catch {
     // In-memory fallback if storage unavailable
   }
-  return [];
+  cachedGlobalHistory = [];
+  return cachedGlobalHistory;
 }
 
 function recordWordPlayed(wordId: number) {
   try {
+    const history = getGlobalHistory();
+    const updated = [wordId, ...history.filter((id) => id !== wordId)].slice(0, MAX_RECENT_HISTORY);
+    cachedGlobalHistory = updated;
     if (typeof localStorage !== 'undefined') {
-      const history = getGlobalHistory();
-      const updated = [wordId, ...history.filter((id) => id !== wordId)].slice(0, MAX_RECENT_HISTORY);
       localStorage.setItem(GLOBAL_WORD_HISTORY_KEY, JSON.stringify(updated));
     }
   } catch {
@@ -111,43 +126,55 @@ const WORD_OVERRIDES_KEY = 'dhappabaj_word_overrides_v1';
 const DELETED_WORDS_KEY = 'dhappabaj_deleted_words_v1';
 
 export function getWordOverrides(): Record<number, Partial<WordItem>> {
+  if (cachedWordOverrides) return cachedWordOverrides;
   try {
     if (typeof localStorage !== 'undefined') {
       const stored = localStorage.getItem(WORD_OVERRIDES_KEY);
       if (stored) {
-        return JSON.parse(stored);
+        cachedWordOverrides = JSON.parse(stored);
+        return cachedWordOverrides!;
       }
     }
   } catch {}
-  return {};
+  cachedWordOverrides = {};
+  return cachedWordOverrides;
 }
 
 export function saveWordOverride(id: number, override: Partial<WordItem>) {
   try {
-    const current = getWordOverrides();
+    const current = { ...getWordOverrides() };
     current[id] = { ...(current[id] || {}), ...override };
+    cachedWordOverrides = current;
+    cachedFullWordPool = null;
     localStorage.setItem(WORD_OVERRIDES_KEY, JSON.stringify(current));
   } catch {}
 }
 
 export function getDeletedWordIds(): number[] {
+  if (cachedDeletedWordIds) return cachedDeletedWordIds;
   try {
     if (typeof localStorage !== 'undefined') {
       const stored = localStorage.getItem(DELETED_WORDS_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          cachedDeletedWordIds = parsed;
+          return cachedDeletedWordIds;
+        }
       }
     }
   } catch {}
-  return [];
+  cachedDeletedWordIds = [];
+  return cachedDeletedWordIds;
 }
 
 export function saveDeletedWordId(id: number) {
   try {
-    const current = getDeletedWordIds();
+    const current = [...getDeletedWordIds()];
     if (!current.includes(id)) {
       current.push(id);
+      cachedDeletedWordIds = current;
+      cachedFullWordPool = null;
       localStorage.setItem(DELETED_WORDS_KEY, JSON.stringify(current));
     }
   } catch {}
@@ -157,16 +184,21 @@ export function bulkDeleteWords(ids: number[]) {
   try {
     const current = new Set(getDeletedWordIds());
     ids.forEach((id) => current.add(id));
-    localStorage.setItem(DELETED_WORDS_KEY, JSON.stringify(Array.from(current)));
+    const arr = Array.from(current);
+    cachedDeletedWordIds = arr;
+    cachedFullWordPool = null;
+    localStorage.setItem(DELETED_WORDS_KEY, JSON.stringify(arr));
   } catch {}
 }
 
 export function bulkUpdateCategory(ids: number[], category: CategoryId) {
   try {
-    const current = getWordOverrides();
+    const current = { ...getWordOverrides() };
     ids.forEach((id) => {
       current[id] = { ...(current[id] || {}), category };
     });
+    cachedWordOverrides = current;
+    cachedFullWordPool = null;
     localStorage.setItem(WORD_OVERRIDES_KEY, JSON.stringify(current));
   } catch {}
 }
@@ -185,6 +217,8 @@ function getCustomWords(): WordItem[] {
 }
 
 export function getFullWordPool(): WordItem[] {
+  if (cachedFullWordPool) return cachedFullWordPool;
+
   const overrides = getWordOverrides();
   const deletedSet = new Set(getDeletedWordIds());
 
@@ -202,7 +236,8 @@ export function getFullWordPool(): WordItem[] {
     return w;
   });
 
-  return [...custom, ...baseWords];
+  cachedFullWordPool = [...custom, ...baseWords];
+  return cachedFullWordPool;
 }
 
 // Helper to pick a random word avoiding recently used words in the current match AND across matches

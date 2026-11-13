@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Clock,
   MessageSquare,
@@ -45,7 +45,7 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
   const [showCluesList, setShowCluesList] = useState<boolean>(true);
   const [quickCategory, setQuickCategory] = useState<'suspect' | 'defense' | 'fun'>('suspect');
   const [cooldownSeconds, setCooldownSeconds] = useState<number>(0);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatScrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Synchronized Discussion Timer
   const [timeLeft, setTimeLeft] = useState<number>(() => {
@@ -62,9 +62,12 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
     return () => unsub();
   }, [room.roomCode]);
 
-  // Auto-scroll chat to bottom
+  // Auto-scroll chat container locally without triggering viewport jank
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = chatScrollContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
   }, [chatMessages]);
 
   // Cooldown countdown timer
@@ -82,9 +85,16 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
   useEffect(() => {
     if (!room.phaseEndsAt) return;
 
-    const interval = setInterval(() => {
+    const updateTick = () => {
       const remaining = Math.max(0, Math.ceil((room.phaseEndsAt! - Date.now()) / 1000));
       setTimeLeft(remaining);
+      return remaining;
+    };
+
+    updateTick();
+
+    const interval = setInterval(() => {
+      const remaining = updateTick();
 
       if (remaining <= 5 && remaining > 0) {
         sound.playTimerTick();
@@ -122,12 +132,15 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
     }
   };
 
-  const customQuickChats = getCustomQuickChats();
-  const quickPhraseGroups = {
-    suspect: customQuickChats.suspect.map((item) => (isEn ? item.en : item.bn)),
-    defense: customQuickChats.defense.map((item) => (isEn ? item.en : item.bn)),
-    fun: customQuickChats.fun.map((item) => (isEn ? item.en : item.bn)),
-  };
+  const customQuickChats = useMemo(() => getCustomQuickChats(), []);
+  const quickPhraseGroups = useMemo(
+    () => ({
+      suspect: customQuickChats.suspect.map((item) => (isEn ? item.en : item.bn)),
+      defense: customQuickChats.defense.map((item) => (isEn ? item.en : item.bn)),
+      fun: customQuickChats.fun.map((item) => (isEn ? item.en : item.bn)),
+    }),
+    [customQuickChats, isEn]
+  );
 
   const quickEmojis = ['😂', '🤫', '👀', '🔥', '💀', '🕵️', '🤡', '🎯', '🍼', '🛑'];
 
@@ -233,7 +246,7 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
         </div>
 
         {/* Messages Feed (Only Last 3 Messages Displayed) */}
-        <div className="flex-1 overflow-y-auto space-y-2 py-2">
+        <div ref={chatScrollContainerRef} className="flex-1 overflow-y-auto space-y-2 py-2">
           {chatMessages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-4 text-slate-400 text-xs">
               <MessageSquare className="w-7 h-7 opacity-30 mb-1" />
@@ -281,7 +294,6 @@ export const OnlineDiscussionScreen: React.FC<OnlineDiscussionScreenProps> = ({
               );
             })
           )}
-          <div ref={messagesEndRef} />
         </div>
 
         {/* Quick Emojis Bar */}
